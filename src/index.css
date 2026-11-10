@@ -1,0 +1,90 @@
+@import 'tailwindcss';
+
+:root {
+  --hospital-blue: #4a9bcf;
+  --hospital-blue-dark: #2e7ba8;
+  --hospital-blue-light: #e8f4fb;
+  --hospital-blue-soft: #d6ebf7;
+  --bg: #f3f4f7;
+  --surface: #ffffff;
+  --text: #1a1a1a;
+  --text-muted: #6b7280;
+  --border: #e5e7eb;
+  --danger: #ef4444;
+  --warning: #f59e0b;
+  --success: #22c55e;
+  --shadow: 0 4px 20px rgba(15, 23, 42, 0.06);
+  --font: 'DM Sans', system-ui, sans-serif;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  min-height: 100%;
+}
+
+body {
+  margin: 0;
+  font-family: var(--font);
+  color: var(--text);
+  background: var(--bg);
+  -webkit-font-smoothing: antialiased;
+}
+
+button,
+input,
+select,
+textarea {
+  font: inherit;
+}
+
+@theme {
+  --color-hospital: #4a9bcf;
+  --color-hospital-dark: #2e7ba8;
+  --color-hospital-light: #e8f4fb;
+  --color-hospital-soft: #d6ebf7;
+  --color-canvas: #f3f4f7;
+  --font-sans: 'DM Sans', system-ui, sans-serif;
+}
+
+@media print {
+  @page {
+    margin: 12mm;
+  }
+
+  html,
+  body,
+  #root {
+    background: #fff !important;
+    min-height: auto;
+  }
+
+  body * {
+    visibility: hidden;
+  }
+
+  #printable-receipt,
+  #printable-receipt * {
+    visibility: visible;
+  }
+
+  #printable-receipt {
+    position: absolute;
+    inset: 0 auto auto 0;
+    width: 100%;
+    max-width: none;
+    margin: 0;
+    padding: 0;
+    box-shadow: none !important;
+    border-radius: 0 !important;
+    background: #fff !important;
+  }
+
+  .no-print {
+    display: none !important;
+  }
+}
