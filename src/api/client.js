@@ -47,6 +47,13 @@ function extractDetail(payload) {
   return 'Request failed'
 }
 
+function networkErrorMessage() {
+  if (typeof navigator !== 'undefined' && !navigator.onLine) {
+    return "You're offline. Showing saved data where available — sales will queue until you're back online."
+  }
+  return "Can't reach the Sheco server. Check your connection and try again."
+}
+
 export async function apiRequest(path, { method = 'GET', body, auth = true, headers = {} } = {}) {
   const session = getStoredSession()
   const requestHeaders = {
@@ -63,11 +70,16 @@ export async function apiRequest(path, { method = 'GET', body, auth = true, head
     requestHeaders.Authorization = `Bearer ${session.accessToken}`
   }
 
-  const response = await fetch(`${getApiBase()}${path}`, {
-    method,
-    headers: requestHeaders,
-    body: body !== undefined ? JSON.stringify(body) : undefined,
-  })
+  let response
+  try {
+    response = await fetch(`${getApiBase()}${path}`, {
+      method,
+      headers: requestHeaders,
+      body: body !== undefined ? JSON.stringify(body) : undefined,
+    })
+  } catch {
+    throw new ApiError(networkErrorMessage(), 0, null)
+  }
 
   const text = await response.text()
   let payload = null

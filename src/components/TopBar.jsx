@@ -79,9 +79,13 @@ export default function TopBar({ searchValue = '', onSearchChange, searchPlaceho
           className={`inline-flex items-center gap-2 rounded-full px-3 py-2 text-xs font-semibold transition disabled:opacity-60 ${
             online
               ? 'bg-emerald-50 text-emerald-700 hover:bg-emerald-100'
-              : 'bg-amber-50 text-amber-700 hover:bg-amber-100'
+              : 'bg-red-50 text-red-600 hover:bg-red-100'
           }`}
-          title={lastSyncMessage || `Catalogue ${catalogueAgeLabel}`}
+          title={
+            online
+              ? lastSyncMessage || `Catalogue ${catalogueAgeLabel}`
+              : 'Offline — sales will queue on this device'
+          }
         >
           {online ? <Wifi size={14} /> : <WifiOff size={14} />}
           <span className="hidden sm:inline">
@@ -124,7 +128,7 @@ export default function TopBar({ searchValue = '', onSearchChange, searchPlaceho
               <div className="max-h-[360px] space-y-1 overflow-y-auto p-2">
                 {!online ? (
                   <NoticeRow
-                    tone="amber"
+                    tone="red"
                     icon={WifiOff}
                     title="You're offline"
                     body="Sales will queue on this device until connection returns."
@@ -280,6 +284,7 @@ export default function TopBar({ searchValue = '', onSearchChange, searchPlaceho
 function NoticeRow({ tone, icon: Icon, title, body }) {
   const tones = {
     amber: 'bg-amber-50 text-amber-700',
+    red: 'bg-red-50 text-red-600',
     blue: 'bg-hospital-light text-hospital-dark',
     green: 'bg-emerald-50 text-emerald-700',
     slate: 'bg-canvas text-[var(--text-muted)]',

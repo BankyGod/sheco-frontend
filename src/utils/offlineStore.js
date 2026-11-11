@@ -5,6 +5,7 @@ const META_STORE = 'meta'
 const LEGACY_QUEUE_KEY = 'sheco_sales_queue'
 const LEGACY_CATALOGUE_KEY = 'sheco_catalogue_cache'
 const CATALOGUE_META_KEY = 'catalogue'
+const DASHBOARD_META_KEY = 'dashboard'
 const SYNC_TAG = 'sheco-sales-sync'
 
 function openDb() {
@@ -147,6 +148,31 @@ export async function getCachedCatalogue() {
     savedAt: row.savedAt,
     products: row.products || [],
     deviceId: row.deviceId || '',
+  }
+}
+
+export async function setCachedDashboard(payload, savedAt = new Date().toISOString()) {
+  await withStore(META_STORE, 'readwrite', (store) => {
+    store.put({
+      key: DASHBOARD_META_KEY,
+      savedAt,
+      ...payload,
+    })
+  })
+}
+
+export async function getCachedDashboard() {
+  await migrateLegacyOfflineData()
+  const row = await withStore(META_STORE, 'readonly', (store) =>
+    requestToPromise(store.get(DASHBOARD_META_KEY)),
+  )
+  if (!row) return null
+  return {
+    savedAt: row.savedAt,
+    stats: row.stats || null,
+    alerts: row.alerts || { lowStock: [], expiringSoon: [], expired: [] },
+    recentSales: row.recentSales || [],
+    users: row.users || [],
   }
 }
 

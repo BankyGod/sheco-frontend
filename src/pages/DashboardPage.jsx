@@ -22,19 +22,24 @@ import {
 } from 'lucide-react'
 import StatCard from '../components/StatCard'
 import { useAuth } from '../context/AuthContext'
+import { useOffline } from '../context/OfflineContext'
 import { getDashboardStats, listSales } from '../api/sales'
 import { getStockAlerts } from '../api/inventory'
 import { formatGhs } from '../utils/money'
 import { listUsers } from '../api/auth'
+import { getCachedDashboard, setCachedDashboard } from '../utils/offlineStore'
 
 export default function DashboardPage() {
   const { user } = useAuth()
+  const { online } = useOffline()
   const [period, setPeriod] = useState('this-week')
   const [stats, setStats] = useState(null)
   const [alerts, setAlerts] = useState({ lowStock: [], expiringSoon: [], expired: [] })
   const [recentSales, setRecentSales] = useState([])
   const [users, setUsers] = useState([])
   const [error, setError] = useState('')
+  const [fromCache, setFromCache] = useState(false)
+  const [cacheSavedAt, setCacheSavedAt] = useState('')
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
@@ -53,8 +58,29 @@ export default function DashboardPage() {
         setAlerts(stockAlerts)
         setRecentSales(sales.slice(0, 6))
         setUsers(userRows)
+        setFromCache(false)
+        setCacheSavedAt('')
+        setError('')
+        await setCachedDashboard({
+          stats: dashboard,
+          alerts: stockAlerts,
+          recentSales: sales.slice(0, 6),
+          users: userRows,
+        })
       } catch (err) {
-        if (active) setError(err.message)
+        if (!active) return
+        const cached = await getCachedDashboard()
+        if (cached?.stats) {
+          setStats(cached.stats)
+          setAlerts(cached.alerts || { lowStock: [], expiringSoon: [], expired: [] })
+          setRecentSales(cached.recentSales || [])
+          setUsers(cached.users || [])
+          setFromCache(true)
+          setCacheSavedAt(cached.savedAt || '')
+          setError('')
+        } else {
+          setError(err.message)
+        }
       } finally {
         if (active) setLoading(false)
       }
@@ -63,7 +89,7 @@ export default function DashboardPage() {
     return () => {
       active = false
     }
-  }, [])
+  }, [online])
 
   if (loading) {
     return <p className="text-sm text-[var(--text-muted)]">Loading dashboard...</p>
@@ -103,6 +129,15 @@ export default function DashboardPage() {
           </span>
         </button>
       </div>
+
+      {!online || fromCache ? (
+        <p className="rounded-xl bg-red-50 px-4 py-3 text-sm text-red-700">
+          {!online ? 'You are offline. ' : 'Server unreachable. '}
+          Showing the last saved dashboard
+          {cacheSavedAt ? ` from ${new Date(cacheSavedAt).toLocaleString()}` : ''}. Charts stay
+          available from cache.
+        </p>
+      ) : null}
 
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <StatCard
@@ -150,55 +185,53 @@ export default function DashboardPage() {
               Save Report
             </button>
           </div>
-          <div className="mt-4 h-56">
+          <div className="mt-4 h-64">
             <ResponsiveContainer width="100%" height="100%">
-              <AreaChart data={stats.weekly || []}>
+              <AreaChart data={stats.weekRevenue || []}>
                 <defs>
-                  <linearGradient id="salesFill" x1="0" y1="0" x2="0" y2="1">
+                  <linearGradient id="rev" x1="0" y1="0" x2="0" y2="1">
                     <stop offset="5%" stopColor="#4A9BCF" stopOpacity={0.35} />
                     <stop offset="95%" stopColor="#4A9BCF" stopOpacity={0} />
                   </linearGradient>
                 </defs>
-                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#eef0f4" />
-                <XAxis dataKey="day" tickLine={false} axisLine={false} />
-                <YAxis tickLine={false} axisLine={false} />
-                <Tooltip />
-                <Area type="monotone" dataKey="sales" stroke="#4A9BCF" fill="url(#salesFill)" strokeWidth={3} />
+                <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
+                <XAxis dataKey="day" tick={{ fontSize: 12 }} />
+                <YAxis tick={{ fontSize: 12 }} />
+                <Tooltip formatter={(v) => formatGhs(v)} />
+                <Area type="monotone" dataKey="revenue" stroke="#2E7BA8" fill="url(#rev)" />
               </AreaChart>
             </ResponsiveContainer>
           </div>
         </div>
       </div>
 
-      <div className="grid gap-4 xl:grid-cols-[1.5fr_1fr]">
+      <div className="grid gap-4 xl:grid-cols-2">
         <div className="rounded-2xl bg-white p-5 shadow-[var(--shadow)]">
           <h3 className="text-lg font-semibold">Total Revenue</h3>
-          <div className="mt-4 h-64">
+          <div className="mt-4 h-56">
             <ResponsiveContainer width="100%" height="100%">
-              <LineChart data={stats.monthly || []}>
-                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#eef0f4" />
-                <XAxis dataKey="month" tickLine={false} axisLine={false} />
-                <YAxis tickLine={false} axisLine={false} />
-                <Tooltip />
-                <Line type="monotone" dataKey="revenue" stroke="#4A9BCF" strokeWidth={3} dot={false} />
-                <Line type="monotone" dataKey="profit" stroke="#ef4444" strokeWidth={3} dot={false} />
-              </LineChart>
+              <BarChart data={stats.weekRevenue || []}>
+                <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
+                <XAxis dataKey="day" tick={{ fontSize: 12 }} />
+                <YAxis tick={{ fontSize: 12 }} />
+                <Tooltip formatter={(v) => formatGhs(v)} />
+                <Bar dataKey="revenue" fill="#4A9BCF" radius={[8, 8, 0, 0]} />
+              </BarChart>
             </ResponsiveContainer>
           </div>
         </div>
 
         <div className="rounded-2xl bg-white p-5 shadow-[var(--shadow)]">
           <h3 className="text-lg font-semibold">Customer Map</h3>
-          <p className="text-xs text-[var(--text-muted)]">Daily sales volume</p>
           <div className="mt-4 h-56">
             <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={stats.weekly || []}>
-                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#eef0f4" />
-                <XAxis dataKey="day" tickLine={false} axisLine={false} />
-                <YAxis tickLine={false} axisLine={false} />
+              <LineChart data={stats.weekRevenue || []}>
+                <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
+                <XAxis dataKey="day" tick={{ fontSize: 12 }} />
+                <YAxis tick={{ fontSize: 12 }} />
                 <Tooltip />
-                <Bar dataKey="sales" fill="#4A9BCF" radius={[8, 8, 0, 0]} />
-              </BarChart>
+                <Line type="monotone" dataKey="sales" stroke="#22c55e" strokeWidth={2} dot={false} />
+              </LineChart>
             </ResponsiveContainer>
           </div>
         </div>
@@ -235,15 +268,9 @@ export default function DashboardPage() {
               </div>
             )
           })}
-          {(alerts.expiringSoon || []).slice(0, 3).map(({ product, batch, daysToExpiry }) => (
-            <div key={batch.id} className="rounded-2xl border border-amber-200 bg-amber-50/50 p-4">
-              <p className="font-semibold">{product.name}</p>
-              <p className="mt-1 text-xs text-[var(--text-muted)]">
-                Batch {batch.batchNumber} expires in {daysToExpiry} days
-              </p>
-              <p className="mt-3 text-sm text-amber-700">Qty remaining: {batch.quantityRemaining}</p>
-            </div>
-          ))}
+          {!recentSales.length ? (
+            <p className="text-sm text-[var(--text-muted)]">No recent sales yet.</p>
+          ) : null}
         </div>
       </div>
     </div>
@@ -251,32 +278,20 @@ export default function DashboardPage() {
 }
 
 function Ring({ label, value, color }) {
-  const radius = 36
-  const circumference = 2 * Math.PI * radius
-  const offset = circumference - (value / 100) * circumference
-
+  const clamped = Math.max(0, Math.min(100, Number(value) || 0))
   return (
     <div className="flex flex-col items-center gap-2">
-      <div className="relative h-[100px] w-[100px]">
-        <svg width="100" height="100" className="-rotate-90">
-          <circle cx="50" cy="50" r={radius} stroke="#eef0f4" strokeWidth="10" fill="none" />
-          <circle
-            cx="50"
-            cy="50"
-            r={radius}
-            stroke={color}
-            strokeWidth="10"
-            fill="none"
-            strokeDasharray={circumference}
-            strokeDashoffset={offset}
-            strokeLinecap="round"
-          />
-        </svg>
-        <div className="absolute inset-0 flex items-center justify-center text-sm font-bold">
-          {value}%
+      <div
+        className="flex h-24 w-24 items-center justify-center rounded-full"
+        style={{
+          background: `conic-gradient(${color} ${clamped}%, #e5e7eb 0)`,
+        }}
+      >
+        <div className="flex h-16 w-16 items-center justify-center rounded-full bg-white text-sm font-semibold">
+          {clamped}%
         </div>
       </div>
-      <p className="text-xs text-[var(--text-muted)]">{label}</p>
+      <p className="text-xs font-medium text-[var(--text-muted)]">{label}</p>
     </div>
   )
 }
