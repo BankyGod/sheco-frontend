@@ -3,7 +3,12 @@ import { getDeviceId } from '../utils/device'
 const SESSION_KEY = 'sheco_session'
 
 export function getApiBase() {
-  return (import.meta.env.VITE_API_URL || 'http://localhost:8000/api').replace(/\/$/, '')
+  // Prefer same-origin /api in production (nginx proxies to the API).
+  // Localhost fallback is only for rare builds without VITE_API_URL.
+  const configured = import.meta.env.VITE_API_URL
+  if (configured) return String(configured).replace(/\/$/, '')
+  if (import.meta.env.PROD) return '/api'
+  return 'http://localhost:8000/api'
 }
 
 export function getStoredSession() {
