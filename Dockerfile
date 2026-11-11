@@ -8,6 +8,10 @@ RUN npm ci
 
 COPY . .
 
+# Bake same-origin API base into the SPA (nginx proxies /api on sheco.online)
+ARG VITE_API_URL=/api
+ENV VITE_API_URL=$VITE_API_URL
+
 RUN npm run build
 
 FROM nginx:alpine
