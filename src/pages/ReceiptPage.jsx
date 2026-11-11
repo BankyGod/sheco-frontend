@@ -1,20 +1,55 @@
+import { useEffect, useState } from 'react'
 import { Link, useLocation, useParams } from 'react-router-dom'
-import { getSale } from '../api/sales'
-import { useAuth } from '../context/AuthContext'
+import { getSale, getQueuedSales } from '../api/sales'
 import { formatGhs } from '../utils/money'
 import { listProducts } from '../api/inventory'
 
 export default function ReceiptPage() {
   const { id } = useParams()
-  const { user } = useAuth()
   const location = useLocation()
-  const sale = getSale(id, user)
-  const products = listProducts({ includeInactive: true, forSalesperson: true })
+  const [sale, setSale] = useState(location.state?.sale || null)
+  const [products, setProducts] = useState([])
+  const [error, setError] = useState('')
+  const [loading, setLoading] = useState(!location.state?.sale)
 
-  if (!sale) {
+  useEffect(() => {
+    let active = true
+    async function load() {
+      try {
+        const productRows = await listProducts({ includeInactive: true }).catch(() => [])
+        if (!active) return
+        setProducts(productRows)
+
+        const queuedRows = await getQueuedSales()
+        const queued = queuedRows.find((s) => s.id === id)
+        if (queued) {
+          setSale(queued)
+          return
+        }
+
+        const remoteSale = await getSale(id)
+        if (!active) return
+        setSale(remoteSale)
+      } catch (err) {
+        if (active && !location.state?.sale) setError(err.message || 'Receipt not found')
+      } finally {
+        if (active) setLoading(false)
+      }
+    }
+    load()
+    return () => {
+      active = false
+    }
+  }, [id, location.state?.sale])
+
+  if (loading) {
+    return <p className="text-sm text-[var(--text-muted)]">Loading receipt...</p>
+  }
+
+  if (error || !sale) {
     return (
       <div className="rounded-2xl bg-white p-8 shadow-[var(--shadow)]">
-        <p className="text-base">Receipt not found.</p>
+        <p className="text-base">{error || 'Receipt not found.'}</p>
         <Link to="/sales" className="mt-3 inline-block text-hospital-dark">
           Back to sales
         </Link>

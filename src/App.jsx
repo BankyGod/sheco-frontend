@@ -15,6 +15,7 @@ import ReceiptPage from './pages/ReceiptPage'
 import ReportsPage from './pages/ReportsPage'
 import AuditPage from './pages/AuditPage'
 import SettingsPage from './pages/SettingsPage'
+import NeedsReviewPage from './pages/NeedsReviewPage'
 import { ROLES } from './api/auth'
 
 function HomeRedirect() {
@@ -37,6 +38,7 @@ export default function App() {
               <Route path="/users" element={<UsersPage />} />
               <Route path="/inventory" element={<InventoryPage />} />
               <Route path="/reports" element={<ReportsPage />} />
+              <Route path="/needs-review" element={<NeedsReviewPage />} />
               <Route path="/audit" element={<AuditPage />} />
               <Route path="/settings" element={<SettingsPage />} />
             </Route>

@@ -9,12 +9,14 @@ import {
   ScrollText,
   Settings,
   Plus,
+  AlertTriangle,
 } from 'lucide-react'
 import { useAuth } from '../context/AuthContext'
 
 const adminLinks = [
   { to: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
   { to: '/sales', label: 'Sales', icon: ShoppingCart },
+  { to: '/needs-review', label: 'Needs review', icon: AlertTriangle },
   { to: '/products', label: 'Products', icon: Package },
   { to: '/inventory', label: 'Inventory', icon: Boxes },
   { to: '/users', label: 'Users', icon: Users },

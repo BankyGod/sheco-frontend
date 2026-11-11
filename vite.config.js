@@ -8,6 +8,9 @@ export default defineConfig({
     react(),
     tailwindcss(),
     VitePWA({
+      strategies: 'injectManifest',
+      srcDir: 'src',
+      filename: 'sw.js',
       registerType: 'autoUpdate',
       includeAssets: ['favicon.svg'],
       manifest: {
@@ -27,9 +30,23 @@ export default defineConfig({
           },
         ],
       },
-      workbox: {
+      injectManifest: {
         globPatterns: ['**/*.{js,css,html,ico,svg,woff2}'],
       },
     }),
   ],
+  server: {
+    proxy: {
+      '/api': {
+        target: 'https://sheco.online',
+        changeOrigin: true,
+        secure: true,
+      },
+      '/health': {
+        target: 'https://sheco.online',
+        changeOrigin: true,
+        secure: true,
+      },
+    },
+  },
 })

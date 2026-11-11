@@ -2,6 +2,8 @@
 
 React + Vite frontend for **Sheco**, a single-pharmacy POS, inventory, and admin system for Ghana.
 
+Talks to the FastAPI backend in `sheco-backend`.
+
 ## Stack
 
 - React + Vite
@@ -9,26 +11,21 @@ React + Vite frontend for **Sheco**, a single-pharmacy POS, inventory, and admin
 - React Router
 - Recharts
 - PWA (vite-plugin-pwa)
-- Mock API layer (ready to swap for FastAPI)
 
-## Demo accounts
-
-| Role | Username | Password | PIN |
-|------|----------|----------|-----|
-| Super Admin | `admin` | `admin123` | `1234` |
-| Salesperson | `kwame` | `sale123` | `2222` |
-| Salesperson | `efua` | `sale123` | `3333` |
-
-## Scripts
+## Setup
 
 ```bash
 npm install
+copy .env.example .env
+# VITE_API_URL=http://localhost:8000/api
 npm run dev
-npm run build
 ```
+
+Start the backend on port `8000` first (see `sheco-backend` README).
 
 ## Notes
 
 - Money is stored as integer **pesewas** (100 = GHS 1.00).
+- Auth uses JWT from `POST /api/auth/login`.
 - Mobile Money is recorded manually (MTN MoMo, Telecel Cash, AT Money).
 - Offline sales queue + catalogue cache live in `localStorage`.

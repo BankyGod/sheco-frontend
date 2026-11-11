@@ -1,13 +1,11 @@
-import { useMemo, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { adjustStock, getStockAlerts, listProducts, restock } from '../api/inventory'
-import { useAuth } from '../context/AuthContext'
 import { formatGhs, fromPesewas } from '../utils/money'
 
 export default function InventoryPage() {
-  const { actor } = useAuth()
-  const [tick, setTick] = useState(0)
-  const products = useMemo(() => listProducts({ includeInactive: false }), [tick])
-  const alerts = useMemo(() => getStockAlerts(), [tick])
+  const [products, setProducts] = useState([])
+  const [alerts, setAlerts] = useState({ lowStock: [], expiringSoon: [], expired: [] })
+  const [loading, setLoading] = useState(true)
   const [restockForm, setRestockForm] = useState({
     productId: '',
     batchNumber: '',
@@ -24,21 +22,38 @@ export default function InventoryPage() {
   const [message, setMessage] = useState('')
   const [error, setError] = useState('')
 
+  const refresh = useCallback(async () => {
+    setLoading(true)
+    try {
+      const [productRows, alertRows] = await Promise.all([
+        listProducts({ includeInactive: false }),
+        getStockAlerts(),
+      ])
+      setProducts(productRows)
+      setAlerts(alertRows)
+    } catch (err) {
+      setError(err.message)
+    } finally {
+      setLoading(false)
+    }
+  }, [])
+
+  useEffect(() => {
+    refresh()
+  }, [refresh])
+
   const allBatches = products.flatMap((p) =>
     (p.batches || []).map((b) => ({ ...b, productName: p.name })),
   )
 
-  function handleRestock(e) {
+  async function handleRestock(e) {
     e.preventDefault()
     setError('')
     try {
-      restock(
-        {
-          ...restockForm,
-          costPrice: Math.round(Number(restockForm.costPrice) * 100),
-        },
-        actor(),
-      )
+      await restock({
+        ...restockForm,
+        costPrice: Math.round(Number(restockForm.costPrice) * 100),
+      })
       setRestockForm({
         productId: '',
         batchNumber: '',
@@ -48,20 +63,20 @@ export default function InventoryPage() {
         supplier: '',
       })
       setMessage('Restock recorded')
-      setTick((t) => t + 1)
+      await refresh()
     } catch (err) {
       setError(err.message)
     }
   }
 
-  function handleAdjust(e) {
+  async function handleAdjust(e) {
     e.preventDefault()
     setError('')
     try {
-      adjustStock(adjustForm, actor())
+      await adjustStock(adjustForm)
       setAdjustForm({ batchId: '', newQuantity: '', reason: '' })
       setMessage('Stock adjusted')
-      setTick((t) => t + 1)
+      await refresh()
     } catch (err) {
       setError(err.message)
     }
@@ -77,52 +92,56 @@ export default function InventoryPage() {
       </div>
 
       <div className="grid gap-4 md:grid-cols-3">
-        <AlertCard title="Low stock" count={alerts.lowStock.length} tone="amber" />
-        <AlertCard title="Expiring ≤ 90 days" count={alerts.expiringSoon.length} tone="red" />
-        <AlertCard title="Expired batches" count={alerts.expired.length} tone="slate" />
+        <AlertCard title="Low stock" count={alerts.lowStock?.length || 0} tone="amber" />
+        <AlertCard title="Expiring ≤ 90 days" count={alerts.expiringSoon?.length || 0} tone="red" />
+        <AlertCard title="Expired batches" count={alerts.expired?.length || 0} tone="slate" />
       </div>
 
       <div className="overflow-hidden rounded-2xl bg-white shadow-[var(--shadow)]">
-        <table className="w-full text-left text-sm">
-          <thead className="bg-canvas text-[var(--text-muted)]">
-            <tr>
-              <th className="px-4 py-3 font-medium">Product</th>
-              <th className="px-4 py-3 font-medium">Batch</th>
-              <th className="px-4 py-3 font-medium">Expiry</th>
-              <th className="px-4 py-3 font-medium">Remaining</th>
-              <th className="px-4 py-3 font-medium">Cost</th>
-              <th className="px-4 py-3 font-medium">Supplier</th>
-              <th className="px-4 py-3 font-medium">Status</th>
-            </tr>
-          </thead>
-          <tbody>
-            {allBatches.map((batch) => (
-              <tr key={batch.id} className="border-t border-[var(--border)]">
-                <td className="px-4 py-3 font-medium">{batch.productName}</td>
-                <td className="px-4 py-3">{batch.batchNumber}</td>
-                <td className="px-4 py-3">{batch.expiryDate}</td>
-                <td className="px-4 py-3">{batch.quantityRemaining}</td>
-                <td className="px-4 py-3">{formatGhs(batch.costPrice)}</td>
-                <td className="px-4 py-3">{batch.supplier}</td>
-                <td className="px-4 py-3">
-                  {batch.expired ? (
-                    <span className="rounded-full bg-red-50 px-2 py-1 text-xs font-semibold text-red-600">
-                      Expired
-                    </span>
-                  ) : batch.daysToExpiry <= 90 ? (
-                    <span className="rounded-full bg-amber-50 px-2 py-1 text-xs font-semibold text-amber-700">
-                      {batch.daysToExpiry}d left
-                    </span>
-                  ) : (
-                    <span className="rounded-full bg-emerald-50 px-2 py-1 text-xs font-semibold text-emerald-700">
-                      OK
-                    </span>
-                  )}
-                </td>
+        {loading ? (
+          <p className="p-6 text-sm text-[var(--text-muted)]">Loading inventory...</p>
+        ) : (
+          <table className="w-full text-left text-sm">
+            <thead className="bg-canvas text-[var(--text-muted)]">
+              <tr>
+                <th className="px-4 py-3 font-medium">Product</th>
+                <th className="px-4 py-3 font-medium">Batch</th>
+                <th className="px-4 py-3 font-medium">Expiry</th>
+                <th className="px-4 py-3 font-medium">Remaining</th>
+                <th className="px-4 py-3 font-medium">Cost</th>
+                <th className="px-4 py-3 font-medium">Supplier</th>
+                <th className="px-4 py-3 font-medium">Status</th>
               </tr>
-            ))}
-          </tbody>
-        </table>
+            </thead>
+            <tbody>
+              {allBatches.map((batch) => (
+                <tr key={batch.id} className="border-t border-[var(--border)]">
+                  <td className="px-4 py-3 font-medium">{batch.productName}</td>
+                  <td className="px-4 py-3">{batch.batchNumber}</td>
+                  <td className="px-4 py-3">{batch.expiryDate}</td>
+                  <td className="px-4 py-3">{batch.quantityRemaining}</td>
+                  <td className="px-4 py-3">{formatGhs(batch.costPrice)}</td>
+                  <td className="px-4 py-3">{batch.supplier}</td>
+                  <td className="px-4 py-3">
+                    {batch.expired ? (
+                      <span className="rounded-full bg-red-50 px-2 py-1 text-xs font-semibold text-red-600">
+                        Expired
+                      </span>
+                    ) : batch.daysToExpiry <= 90 ? (
+                      <span className="rounded-full bg-amber-50 px-2 py-1 text-xs font-semibold text-amber-700">
+                        {batch.daysToExpiry}d left
+                      </span>
+                    ) : (
+                      <span className="rounded-full bg-emerald-50 px-2 py-1 text-xs font-semibold text-emerald-700">
+                        OK
+                      </span>
+                    )}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
       </div>
 
       <div className="grid gap-6 xl:grid-cols-2">

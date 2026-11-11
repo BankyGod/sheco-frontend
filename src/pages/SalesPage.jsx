@@ -1,19 +1,46 @@
-import { useMemo, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { Link, useOutletContext } from 'react-router-dom'
-import { listSales, voidSale } from '../api/sales'
+import { getQueuedSales, listSales, voidSale } from '../api/sales'
 import { listUsers } from '../api/auth'
 import { useAuth } from '../context/AuthContext'
 import { formatGhs } from '../utils/money'
 
 export default function SalesPage() {
-  const { user, isAdmin, actor } = useAuth()
+  const { isAdmin } = useAuth()
   const { search = '' } = useOutletContext() || {}
-  const [tick, setTick] = useState(0)
-  const sales = useMemo(() => listSales({ user }), [tick, user])
-  const users = useMemo(() => listUsers(), [])
+  const [sales, setSales] = useState([])
+  const [users, setUsers] = useState([])
+  const [loading, setLoading] = useState(true)
   const [voidingId, setVoidingId] = useState(null)
   const [reason, setReason] = useState('')
   const [error, setError] = useState('')
+
+  const refresh = useCallback(async () => {
+    setLoading(true)
+    try {
+      const [saleRows, userRows, queued] = await Promise.all([
+        listSales().catch(() => []),
+        isAdmin ? listUsers() : Promise.resolve([]),
+        getQueuedSales(),
+      ])
+      const byId = new Map()
+      for (const sale of saleRows) byId.set(sale.id, sale)
+      for (const sale of queued) {
+        if (!byId.has(sale.id)) byId.set(sale.id, { ...sale, status: sale.status || 'queued' })
+      }
+      setSales([...byId.values()].sort((a, b) => String(b.createdAt).localeCompare(String(a.createdAt))))
+      setUsers(userRows)
+      setError('')
+    } catch (err) {
+      setError(err.message)
+    } finally {
+      setLoading(false)
+    }
+  }, [isAdmin])
+
+  useEffect(() => {
+    refresh()
+  }, [refresh])
 
   const filtered = sales.filter((sale) => {
     const q = search.trim().toLowerCase()
@@ -21,13 +48,13 @@ export default function SalesPage() {
     return sale.receiptNumber.toLowerCase().includes(q) || sale.payment.method.includes(q)
   })
 
-  function handleVoid(saleId) {
+  async function handleVoid(saleId) {
     setError('')
     try {
-      voidSale(saleId, reason, actor())
+      await voidSale(saleId, reason)
       setVoidingId(null)
       setReason('')
-      setTick((t) => t + 1)
+      await refresh()
     } catch (err) {
       setError(err.message)
     }
@@ -48,63 +75,78 @@ export default function SalesPage() {
       </div>
 
       <div className="overflow-hidden rounded-2xl bg-white shadow-[var(--shadow)]">
-        <table className="w-full text-left text-sm">
-          <thead className="bg-canvas text-[var(--text-muted)]">
-            <tr>
-              <th className="px-4 py-3 font-medium">Receipt</th>
-              <th className="px-4 py-3 font-medium">When</th>
-              {isAdmin ? <th className="px-4 py-3 font-medium">Salesperson</th> : null}
-              <th className="px-4 py-3 font-medium">Payment</th>
-              <th className="px-4 py-3 font-medium">Total</th>
-              <th className="px-4 py-3 font-medium">Status</th>
-              <th className="px-4 py-3 font-medium" />
-            </tr>
-          </thead>
-          <tbody>
-            {filtered.map((sale) => {
-              const seller = users.find((u) => u.id === sale.salespersonId)
-              return (
-                <tr key={sale.id} className="border-t border-[var(--border)]">
-                  <td className="px-4 py-3 font-medium">{sale.receiptNumber}</td>
-                  <td className="px-4 py-3">{new Date(sale.createdAt).toLocaleString()}</td>
-                  {isAdmin ? <td className="px-4 py-3">{seller?.name || sale.salespersonId}</td> : null}
-                  <td className="px-4 py-3 uppercase">
-                    {sale.payment.method}
-                    {sale.payment.network ? ` · ${sale.payment.network}` : ''}
-                  </td>
-                  <td className="px-4 py-3">{formatGhs(sale.total)}</td>
-                  <td className="px-4 py-3">
-                    <span
-                      className={`rounded-full px-2 py-1 text-xs font-semibold ${
-                        sale.status === 'voided'
-                          ? 'bg-red-50 text-red-600'
-                          : 'bg-emerald-50 text-emerald-700'
-                      }`}
-                    >
-                      {sale.status}
-                    </span>
-                  </td>
-                  <td className="px-4 py-3">
-                    <div className="flex flex-wrap gap-2">
-                      <Link to={`/sales/${sale.id}`} className="text-xs font-semibold text-hospital-dark">
-                        Receipt
-                      </Link>
-                      {isAdmin && sale.status === 'completed' ? (
-                        <button
-                          type="button"
-                          className="text-xs font-semibold text-red-500"
-                          onClick={() => setVoidingId(sale.id)}
-                        >
-                          Void
-                        </button>
-                      ) : null}
-                    </div>
-                  </td>
-                </tr>
-              )
-            })}
-          </tbody>
-        </table>
+        {loading ? (
+          <p className="p-6 text-sm text-[var(--text-muted)]">Loading sales...</p>
+        ) : (
+          <table className="w-full text-left text-sm">
+            <thead className="bg-canvas text-[var(--text-muted)]">
+              <tr>
+                <th className="px-4 py-3 font-medium">Receipt</th>
+                <th className="px-4 py-3 font-medium">When</th>
+                {isAdmin ? <th className="px-4 py-3 font-medium">Salesperson</th> : null}
+                <th className="px-4 py-3 font-medium">Payment</th>
+                <th className="px-4 py-3 font-medium">Total</th>
+                <th className="px-4 py-3 font-medium">Status</th>
+                <th className="px-4 py-3 font-medium" />
+              </tr>
+            </thead>
+            <tbody>
+              {filtered.map((sale) => {
+                const seller =
+                  sale.salespersonName ||
+                  users.find((u) => String(u.id) === String(sale.salespersonId))?.name ||
+                  sale.salespersonId
+                return (
+                  <tr key={sale.id} className="border-t border-[var(--border)]">
+                    <td className="px-4 py-3 font-medium">{sale.receiptNumber}</td>
+                    <td className="px-4 py-3">{new Date(sale.createdAt).toLocaleString()}</td>
+                    {isAdmin ? <td className="px-4 py-3">{seller}</td> : null}
+                    <td className="px-4 py-3 uppercase">
+                      {sale.payment.method}
+                      {sale.payment.network ? ` · ${sale.payment.network}` : ''}
+                    </td>
+                    <td className="px-4 py-3">{formatGhs(sale.total)}</td>
+                    <td className="px-4 py-3">
+                      <span
+                        className={`rounded-full px-2 py-1 text-xs font-semibold ${
+                          sale.status === 'voided'
+                            ? 'bg-red-50 text-red-600'
+                            : sale.syncFlag === 'queued' || sale.status === 'queued'
+                              ? 'bg-amber-50 text-amber-700'
+                              : sale.needsReview
+                                ? 'bg-orange-50 text-orange-700'
+                                : 'bg-emerald-50 text-emerald-700'
+                        }`}
+                      >
+                        {sale.syncFlag === 'queued' || sale.status === 'queued'
+                          ? 'Queued'
+                          : sale.needsReview
+                            ? 'Needs review'
+                            : sale.status}
+                      </span>
+                    </td>
+                    <td className="px-4 py-3">
+                      <div className="flex flex-wrap gap-2">
+                        <Link to={`/sales/${sale.id}`} className="text-xs font-semibold text-hospital-dark">
+                          Receipt
+                        </Link>
+                        {isAdmin && sale.status === 'completed' && sale.syncFlag !== 'queued' ? (
+                          <button
+                            type="button"
+                            className="text-xs font-semibold text-red-500"
+                            onClick={() => setVoidingId(sale.id)}
+                          >
+                            Void
+                          </button>
+                        ) : null}
+                      </div>
+                    </td>
+                  </tr>
+                )
+              })}
+            </tbody>
+          </table>
+        )}
       </div>
 
       {voidingId ? (

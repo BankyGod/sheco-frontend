@@ -1,17 +1,16 @@
-import { useMemo, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import {
   createUser,
+  deleteUser,
   listUsers,
   resetPassword,
   ROLES,
   setUserActive,
 } from '../api/auth'
-import { useAuth } from '../context/AuthContext'
 
 export default function UsersPage() {
-  const { actor } = useAuth()
-  const [tick, setTick] = useState(0)
-  const users = useMemo(() => listUsers(), [tick])
+  const [users, setUsers] = useState([])
+  const [loading, setLoading] = useState(true)
   const [form, setForm] = useState({
     name: '',
     username: '',
@@ -22,19 +21,30 @@ export default function UsersPage() {
   const [message, setMessage] = useState('')
   const [error, setError] = useState('')
 
-  function refresh() {
-    setTick((t) => t + 1)
-  }
+  const refresh = useCallback(async () => {
+    setLoading(true)
+    try {
+      setUsers(await listUsers())
+    } catch (err) {
+      setError(err.message)
+    } finally {
+      setLoading(false)
+    }
+  }, [])
 
-  function handleCreate(e) {
+  useEffect(() => {
+    refresh()
+  }, [refresh])
+
+  async function handleCreate(e) {
     e.preventDefault()
     setError('')
     setMessage('')
     try {
-      createUser(form, actor())
+      await createUser(form)
       setForm({ name: '', username: '', password: '', pin: '', role: ROLES.SALESPERSON })
       setMessage('User created')
-      refresh()
+      await refresh()
     } catch (err) {
       setError(err.message)
     }
@@ -45,68 +55,122 @@ export default function UsersPage() {
       <div>
         <h2 className="text-3xl font-semibold tracking-tight">Users</h2>
         <p className="mt-1 text-sm text-[var(--text-muted)]">
-          Create, deactivate, and reset passwords for pharmacy staff.
+          Create, deactivate, or delete salesperson accounts. Deleted staff stay in sales
+          records for accounting.
         </p>
       </div>
 
       <div className="grid gap-6 xl:grid-cols-[1.2fr_0.8fr]">
         <div className="overflow-hidden rounded-2xl bg-white shadow-[var(--shadow)]">
-          <table className="w-full text-left text-sm">
-            <thead className="bg-canvas text-[var(--text-muted)]">
-              <tr>
-                <th className="px-4 py-3 font-medium">Name</th>
-                <th className="px-4 py-3 font-medium">Username</th>
-                <th className="px-4 py-3 font-medium">Role</th>
-                <th className="px-4 py-3 font-medium">Status</th>
-                <th className="px-4 py-3 font-medium">Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {users.map((user) => (
-                <tr key={user.id} className="border-t border-[var(--border)]">
-                  <td className="px-4 py-3 font-medium">{user.name}</td>
-                  <td className="px-4 py-3">{user.username}</td>
-                  <td className="px-4 py-3 capitalize">{user.role.replace('_', ' ')}</td>
-                  <td className="px-4 py-3">
-                    <span
-                      className={`rounded-full px-2 py-1 text-xs font-semibold ${
-                        user.active ? 'bg-emerald-50 text-emerald-700' : 'bg-red-50 text-red-600'
-                      }`}
-                    >
-                      {user.active ? 'Active' : 'Inactive'}
-                    </span>
-                  </td>
-                  <td className="px-4 py-3">
-                    <div className="flex flex-wrap gap-2">
-                      <button
-                        type="button"
-                        className="rounded-lg bg-hospital-light px-2 py-1 text-xs font-semibold text-hospital-dark"
-                        onClick={() => {
-                          const pwd = window.prompt('New password', 'changeme123')
-                          if (!pwd) return
-                          resetPassword(user.id, pwd, actor())
-                          setMessage(`Password reset for ${user.username}`)
-                          refresh()
-                        }}
-                      >
-                        Reset password
-                      </button>
-                      <button
-                        type="button"
-                        className="rounded-lg bg-canvas px-2 py-1 text-xs font-semibold"
-                        onClick={() => {
-                          setUserActive(user.id, !user.active, actor())
-                          refresh()
-                        }}
-                      >
-                        {user.active ? 'Deactivate' : 'Activate'}
-                      </button>
-                    </div>
-                  </td>
+          {loading ? (
+            <p className="p-6 text-sm text-[var(--text-muted)]">Loading users...</p>
+          ) : (
+            <table className="w-full text-left text-sm">
+              <thead className="bg-canvas text-[var(--text-muted)]">
+                <tr>
+                  <th className="px-4 py-3 font-medium">Name</th>
+                  <th className="px-4 py-3 font-medium">Username</th>
+                  <th className="px-4 py-3 font-medium">Role</th>
+                  <th className="px-4 py-3 font-medium">Status</th>
+                  <th className="px-4 py-3 font-medium">Actions</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {users.map((user) => {
+                  const isDeleted = Boolean(user.deleted)
+                  const statusLabel = isDeleted ? 'Deleted' : user.active ? 'Active' : 'Inactive'
+                  const statusClass = isDeleted
+                    ? 'bg-slate-100 text-slate-600'
+                    : user.active
+                      ? 'bg-emerald-50 text-emerald-700'
+                      : 'bg-red-50 text-red-600'
+                  return (
+                    <tr key={user.id} className="border-t border-[var(--border)]">
+                      <td className="px-4 py-3 font-medium">{user.name}</td>
+                      <td className="px-4 py-3">
+                        {isDeleted ? (
+                          <span className="text-[var(--text-muted)]">—</span>
+                        ) : (
+                          user.username
+                        )}
+                      </td>
+                      <td className="px-4 py-3 capitalize">{user.role.replace('_', ' ')}</td>
+                      <td className="px-4 py-3">
+                        <span
+                          className={`rounded-full px-2 py-1 text-xs font-semibold ${statusClass}`}
+                        >
+                          {statusLabel}
+                        </span>
+                      </td>
+                      <td className="px-4 py-3">
+                        {isDeleted ? (
+                          <span className="text-xs text-[var(--text-muted)]">
+                            Sales history retained
+                          </span>
+                        ) : (
+                          <div className="flex flex-wrap gap-2">
+                            <button
+                              type="button"
+                              className="rounded-lg bg-hospital-light px-2 py-1 text-xs font-semibold text-hospital-dark"
+                              onClick={async () => {
+                                const pwd = window.prompt('New password', '')
+                                if (!pwd) return
+                                try {
+                                  await resetPassword(user.id, pwd)
+                                  setMessage(`Password reset for ${user.username}`)
+                                } catch (err) {
+                                  setError(err.message)
+                                }
+                              }}
+                            >
+                              Reset password
+                            </button>
+                            <button
+                              type="button"
+                              className="rounded-lg bg-canvas px-2 py-1 text-xs font-semibold"
+                              onClick={async () => {
+                                try {
+                                  await setUserActive(user.id, !user.active)
+                                  await refresh()
+                                } catch (err) {
+                                  setError(err.message)
+                                }
+                              }}
+                            >
+                              {user.active ? 'Deactivate' : 'Activate'}
+                            </button>
+                            {user.role === ROLES.SALESPERSON ? (
+                              <button
+                                type="button"
+                                className="rounded-lg bg-red-50 px-2 py-1 text-xs font-semibold text-red-600"
+                                onClick={async () => {
+                                  const ok = window.confirm(
+                                    `Delete ${user.name}? They will no longer be able to sign in. Their sales will remain in reports for accounting.`,
+                                  )
+                                  if (!ok) return
+                                  try {
+                                    await deleteUser(user.id)
+                                    setMessage(
+                                      `${user.name} deleted. Sales history kept for accounting.`,
+                                    )
+                                    await refresh()
+                                  } catch (err) {
+                                    setError(err.message)
+                                  }
+                                }}
+                              >
+                                Delete
+                              </button>
+                            ) : null}
+                          </div>
+                        )}
+                      </td>
+                    </tr>
+                  )
+                })}
+              </tbody>
+            </table>
+          )}
         </div>
 
         <form onSubmit={handleCreate} className="space-y-3 rounded-2xl bg-white p-5 shadow-[var(--shadow)]">

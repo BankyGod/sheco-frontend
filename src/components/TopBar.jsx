@@ -3,8 +3,8 @@ import { useAuth } from '../context/AuthContext'
 import { useOffline } from '../context/OfflineContext'
 
 export default function TopBar({ searchValue = '', onSearchChange, searchPlaceholder = 'Search...' }) {
-  const { user, logout } = useAuth()
-  const { online, queueCount, syncNow } = useOffline()
+  const { user, logout, isOfflineUnlock } = useAuth()
+  const { online, queueCount, syncNow, syncing, lastSyncMessage, catalogueAgeLabel } = useOffline()
 
   return (
     <header className="flex flex-wrap items-center gap-4 px-2 py-2">
@@ -22,13 +22,19 @@ export default function TopBar({ searchValue = '', onSearchChange, searchPlaceho
         <button
           type="button"
           onClick={() => syncNow()}
-          className={`inline-flex items-center gap-2 rounded-full px-3 py-2 text-xs font-semibold ${
+          disabled={syncing}
+          className={`inline-flex items-center gap-2 rounded-full px-3 py-2 text-xs font-semibold disabled:opacity-60 ${
             online ? 'bg-emerald-50 text-emerald-700' : 'bg-amber-50 text-amber-700'
           }`}
-          title={online ? 'Online' : 'Offline'}
+          title={
+            lastSyncMessage ||
+            (isOfflineUnlock
+              ? 'Sign in online to sync queued sales'
+              : `Catalogue ${catalogueAgeLabel}`)
+          }
         >
           {online ? <Wifi size={14} /> : <WifiOff size={14} />}
-          {online ? 'Online' : 'Offline'}
+          {syncing ? 'Syncing...' : online ? (isOfflineUnlock ? 'Online · unlock' : 'Online') : 'Offline'}
           {queueCount > 0 ? (
             <span className="inline-flex items-center gap-1 rounded-full bg-white px-2 py-0.5">
               <CloudUpload size={12} /> {queueCount}
@@ -39,6 +45,7 @@ export default function TopBar({ searchValue = '', onSearchChange, searchPlaceho
         <button
           type="button"
           className="relative flex h-11 w-11 items-center justify-center rounded-full bg-hospital-light text-hospital-dark"
+          title={queueCount ? `${queueCount} queued sale(s)` : 'No queued sales'}
         >
           <Bell size={18} />
           {queueCount > 0 ? (

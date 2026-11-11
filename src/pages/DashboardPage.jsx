@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useState } from 'react'
 import {
   Area,
   AreaChart,
@@ -30,10 +30,48 @@ import { listUsers } from '../api/auth'
 export default function DashboardPage() {
   const { user } = useAuth()
   const [period, setPeriod] = useState('this-week')
-  const stats = useMemo(() => getDashboardStats(), [])
-  const alerts = useMemo(() => getStockAlerts(), [])
-  const recentSales = useMemo(() => listSales().slice(0, 6), [])
-  const users = useMemo(() => listUsers(), [])
+  const [stats, setStats] = useState(null)
+  const [alerts, setAlerts] = useState({ lowStock: [], expiringSoon: [], expired: [] })
+  const [recentSales, setRecentSales] = useState([])
+  const [users, setUsers] = useState([])
+  const [error, setError] = useState('')
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    let active = true
+    async function load() {
+      setLoading(true)
+      try {
+        const [dashboard, stockAlerts, sales, userRows] = await Promise.all([
+          getDashboardStats(),
+          getStockAlerts(),
+          listSales(),
+          listUsers(),
+        ])
+        if (!active) return
+        setStats(dashboard)
+        setAlerts(stockAlerts)
+        setRecentSales(sales.slice(0, 6))
+        setUsers(userRows)
+      } catch (err) {
+        if (active) setError(err.message)
+      } finally {
+        if (active) setLoading(false)
+      }
+    }
+    load()
+    return () => {
+      active = false
+    }
+  }, [])
+
+  if (loading) {
+    return <p className="text-sm text-[var(--text-muted)]">Loading dashboard...</p>
+  }
+
+  if (error || !stats) {
+    return <p className="text-sm text-red-500">{error || 'Unable to load dashboard'}</p>
+  }
 
   const cashShare = stats.todayRevenue
     ? Math.round((stats.cashRevenue / stats.todayRevenue) * 100)
@@ -41,8 +79,8 @@ export default function DashboardPage() {
   const momoShare = stats.todayRevenue
     ? Math.round((stats.momoRevenue / stats.todayRevenue) * 100)
     : 0
-  const lowStockShare = Math.min(100, alerts.lowStock.length * 18)
-  const expiryShare = Math.min(100, alerts.expiringSoon.length * 20)
+  const lowStockShare = Math.min(100, (alerts.lowStock?.length || 0) * 18)
+  const expiryShare = Math.min(100, (alerts.expiringSoon?.length || 0) * 20)
 
   return (
     <div className="space-y-6">
@@ -81,14 +119,14 @@ export default function DashboardPage() {
         />
         <StatCard
           label="Low Stock Items"
-          value={alerts.lowStock.length}
+          value={alerts.lowStock?.length || 0}
           trend="At or below reorder level"
           icon={PackageMinus}
           accent="warning"
         />
         <StatCard
           label="Expiring Soon"
-          value={alerts.expiringSoon.length}
+          value={alerts.expiringSoon?.length || 0}
           trend="Within 90 days"
           icon={TriangleAlert}
           accent="danger"
@@ -114,7 +152,7 @@ export default function DashboardPage() {
           </div>
           <div className="mt-4 h-56">
             <ResponsiveContainer width="100%" height="100%">
-              <AreaChart data={stats.weekly}>
+              <AreaChart data={stats.weekly || []}>
                 <defs>
                   <linearGradient id="salesFill" x1="0" y1="0" x2="0" y2="1">
                     <stop offset="5%" stopColor="#4A9BCF" stopOpacity={0.35} />
@@ -137,7 +175,7 @@ export default function DashboardPage() {
           <h3 className="text-lg font-semibold">Total Revenue</h3>
           <div className="mt-4 h-64">
             <ResponsiveContainer width="100%" height="100%">
-              <LineChart data={stats.monthly}>
+              <LineChart data={stats.monthly || []}>
                 <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#eef0f4" />
                 <XAxis dataKey="month" tickLine={false} axisLine={false} />
                 <YAxis tickLine={false} axisLine={false} />
@@ -154,7 +192,7 @@ export default function DashboardPage() {
           <p className="text-xs text-[var(--text-muted)]">Daily sales volume</p>
           <div className="mt-4 h-56">
             <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={stats.weekly}>
+              <BarChart data={stats.weekly || []}>
                 <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#eef0f4" />
                 <XAxis dataKey="day" tickLine={false} axisLine={false} />
                 <YAxis tickLine={false} axisLine={false} />
@@ -172,12 +210,15 @@ export default function DashboardPage() {
         </div>
         <div className="grid gap-4 lg:grid-cols-3">
           {recentSales.map((sale) => {
-            const seller = users.find((u) => u.id === sale.salespersonId)
+            const seller =
+              sale.salespersonName ||
+              users.find((u) => String(u.id) === String(sale.salespersonId))?.name ||
+              'Salesperson'
             return (
               <div key={sale.id} className="relative rounded-2xl border border-[var(--border)] p-4">
                 <div className="flex items-start justify-between gap-3">
                   <div>
-                    <p className="font-semibold">{seller?.name || 'Salesperson'}</p>
+                    <p className="font-semibold">{seller}</p>
                     <p className="text-xs text-[var(--text-muted)]">
                       {new Date(sale.createdAt).toLocaleString()}
                     </p>
@@ -194,7 +235,7 @@ export default function DashboardPage() {
               </div>
             )
           })}
-          {alerts.expiringSoon.slice(0, 3).map(({ product, batch, daysToExpiry }) => (
+          {(alerts.expiringSoon || []).slice(0, 3).map(({ product, batch, daysToExpiry }) => (
             <div key={batch.id} className="rounded-2xl border border-amber-200 bg-amber-50/50 p-4">
               <p className="font-semibold">{product.name}</p>
               <p className="mt-1 text-xs text-[var(--text-muted)]">

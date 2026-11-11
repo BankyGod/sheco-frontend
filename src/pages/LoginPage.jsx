@@ -6,10 +6,10 @@ import { useOffline } from '../context/OfflineContext'
 
 export default function LoginPage() {
   const { login, unlockOffline, isAuthenticated, user } = useAuth()
-  const { online } = useOffline()
+  const { online, syncNow, queueCount } = useOffline()
   const navigate = useNavigate()
-  const [username, setUsername] = useState('admin')
-  const [password, setPassword] = useState('admin123')
+  const [username, setUsername] = useState('')
+  const [password, setPassword] = useState('')
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
   const [mode, setMode] = useState('online')
@@ -23,10 +23,13 @@ export default function LoginPage() {
     setError('')
     setLoading(true)
     try {
-      const session =
-        mode === 'offline' || !online
-          ? await unlockOffline(username, password)
-          : await login(username, password)
+      const goingOffline = mode === 'offline' || !online
+      const session = goingOffline
+        ? await unlockOffline(username, password)
+        : await login(username, password)
+      if (!goingOffline && queueCount > 0) {
+        await syncNow()
+      }
       navigate(session.user.role === ROLES.SUPER_ADMIN ? '/dashboard' : '/pos')
     } catch (err) {
       setError(err.message || 'Sign in failed')
@@ -36,9 +39,14 @@ export default function LoginPage() {
   }
 
   return (
-    <div className="relative flex min-h-screen items-center justify-center overflow-hidden bg-canvas px-4">
-      <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_top_left,_#d6ebf7,_transparent_45%),radial-gradient(circle_at_bottom_right,_#e8f4fb,_transparent_40%)]" />
-      <div className="relative w-full max-w-md rounded-3xl bg-white p-8 shadow-[var(--shadow)]">
+    <div className="relative flex min-h-screen items-center justify-center overflow-hidden px-4">
+      <div
+        className="absolute inset-0 bg-cover bg-center"
+        style={{ backgroundImage: "url('/login-pharmacy-bg.jpg')" }}
+      />
+      <div className="absolute inset-0 bg-[linear-gradient(135deg,rgba(15,40,60,0.72),rgba(46,123,168,0.55))]" />
+
+      <div className="relative w-full max-w-md rounded-3xl bg-white/95 p-8 shadow-[var(--shadow)] backdrop-blur-sm">
         <div className="mb-8 text-center">
           <h1 className="text-3xl font-bold tracking-tight">
             Sheco<span className="text-hospital">.</span>
@@ -65,7 +73,7 @@ export default function LoginPage() {
 
         {!online ? (
           <p className="mb-4 rounded-xl bg-amber-50 px-3 py-2 text-sm text-amber-700">
-            You are offline. Use offline unlock with your password or PIN if this device was signed in before.
+            You are offline. Use offline unlock with your password if this device was signed in before.
           </p>
         ) : null}
 
@@ -81,9 +89,7 @@ export default function LoginPage() {
             />
           </label>
           <label className="block text-sm">
-            <span className="mb-1 block font-medium">
-              {mode === 'offline' ? 'Password or PIN' : 'Password'}
-            </span>
+            <span className="mb-1 block font-medium">Password</span>
             <input
               type="password"
               value={password}
@@ -104,12 +110,6 @@ export default function LoginPage() {
             {loading ? 'Signing in...' : mode === 'offline' ? 'Unlock offline' : 'Sign in'}
           </button>
         </form>
-
-        <div className="mt-6 rounded-2xl bg-hospital-light p-4 text-xs text-hospital-dark">
-          <p className="font-semibold">Demo accounts</p>
-          <p className="mt-1">Admin: admin / admin123</p>
-          <p>Sales: kwame / sale123 (PIN 2222)</p>
-        </div>
       </div>
     </div>
   )

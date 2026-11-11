@@ -6,6 +6,7 @@ import {
   unlockOffline as apiUnlock,
   ROLES,
 } from '../api/auth'
+import { saveSession } from '../api/client'
 
 const AuthContext = createContext(null)
 
@@ -19,6 +20,7 @@ export function AuthProvider({ children }) {
       isAuthenticated: Boolean(session?.user),
       isAdmin: session?.user?.role === ROLES.SUPER_ADMIN,
       isSalesperson: session?.user?.role === ROLES.SALESPERSON,
+      isOfflineUnlock: Boolean(session?.offlineUnlock),
       async login(username, password) {
         const next = await apiLogin(username, password)
         setSession(next)
@@ -26,6 +28,18 @@ export function AuthProvider({ children }) {
       },
       async unlockOffline(username, secret) {
         const next = await apiUnlock(username, secret)
+        setSession(next)
+        return next
+      },
+      updateUser(user) {
+        const next = {
+          ...session,
+          user: {
+            ...session?.user,
+            ...user,
+          },
+        }
+        saveSession(next)
         setSession(next)
         return next
       },

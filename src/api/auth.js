@@ -1,68 +1,66 @@
-import { addAudit, getStore, ROLES } from '../data/mockStore'
+import {
+  apiRequest,
+  clearStoredSession,
+  getStoredSession,
+  saveSession,
+} from './client'
 import { getDeviceId } from '../utils/device'
 
-const SESSION_KEY = 'sheco_session'
 const OFFLINE_UNLOCK_KEY = 'sheco_offline_unlock'
 
-export { ROLES }
+export const ROLES = {
+  SUPER_ADMIN: 'super_admin',
+  SALESPERSON: 'salesperson',
+}
+
+async function hashSecret(secret) {
+  const data = new TextEncoder().encode(String(secret))
+  const digest = await crypto.subtle.digest('SHA-256', data)
+  return [...new Uint8Array(digest)].map((b) => b.toString(16).padStart(2, '0')).join('')
+}
 
 export function getSession() {
-  const raw = localStorage.getItem(SESSION_KEY)
-  if (!raw) return null
-  try {
-    return JSON.parse(raw)
-  } catch {
-    return null
-  }
+  return getStoredSession()
 }
 
 export function clearSession() {
-  localStorage.removeItem(SESSION_KEY)
-}
-
-function publicUser(user) {
-  return {
-    id: user.id,
-    name: user.name,
-    username: user.username,
-    role: user.role,
-    active: user.active,
-  }
+  clearStoredSession()
 }
 
 export async function login(username, password) {
-  const store = getStore()
-  const user = store.users.find(
-    (u) => u.username.toLowerCase() === String(username).toLowerCase() && u.active,
-  )
-  if (!user || user.password !== password) {
-    throw new Error('Invalid username or password')
-  }
+  const deviceId = getDeviceId()
+  const data = await apiRequest('/auth/login', {
+    method: 'POST',
+    auth: false,
+    body: {
+      username,
+      password,
+      deviceId,
+    },
+  })
 
   const session = {
-    user: publicUser(user),
-    deviceId: getDeviceId(),
-    signedInAt: new Date().toISOString(),
+    user: data.user,
+    deviceId: data.deviceId || deviceId,
+    signedInAt: data.signedInAt,
+    accessToken: data.accessToken,
+    tokenType: data.tokenType || 'bearer',
   }
-  localStorage.setItem(SESSION_KEY, JSON.stringify(session))
+  saveSession(session)
+
+  const days = data.offlineUnlockDays ?? 7
   localStorage.setItem(
     OFFLINE_UNLOCK_KEY,
     JSON.stringify({
-      userId: user.id,
-      username: user.username,
-      pin: user.pin,
-      password: user.password,
-      name: user.name,
-      role: user.role,
-      unlockedUntil: Date.now() + store.settings.offlineUnlockDays * 24 * 60 * 60 * 1000,
+      userId: data.user.id,
+      username: data.user.username,
+      name: data.user.name,
+      role: data.user.role,
+      passwordHash: await hashSecret(password),
+      unlockedUntil: Date.now() + days * 24 * 60 * 60 * 1000,
     }),
   )
-  addAudit({
-    userId: user.id,
-    deviceId: session.deviceId,
-    action: 'sign_in',
-    record: `User ${user.name}`,
-  })
+
   return session
 }
 
@@ -76,8 +74,9 @@ export async function unlockOffline(username, secret) {
   if (unlock.username.toLowerCase() !== String(username).toLowerCase()) {
     throw new Error('User is not unlocked on this device')
   }
-  if (secret !== unlock.password && secret !== unlock.pin) {
-    throw new Error('Invalid credentials or PIN')
+  const secretHash = await hashSecret(secret)
+  if (secretHash !== unlock.passwordHash) {
+    throw new Error('Invalid credentials')
   }
 
   const session = {
@@ -91,63 +90,90 @@ export async function unlockOffline(username, secret) {
     deviceId: getDeviceId(),
     signedInAt: new Date().toISOString(),
     offlineUnlock: true,
+    accessToken: null,
   }
-  localStorage.setItem(SESSION_KEY, JSON.stringify(session))
+  saveSession(session)
   return session
 }
 
-export function listUsers() {
-  return getStore().users.map(publicUser)
+export async function listUsers() {
+  return apiRequest('/users')
 }
 
-export function createUser({ name, username, password, pin, role }, actor) {
-  const store = getStore()
-  if (store.users.some((u) => u.username.toLowerCase() === username.toLowerCase())) {
-    throw new Error('Username already exists')
+export async function createUser({ name, username, password, pin, role }) {
+  return apiRequest('/users', {
+    method: 'POST',
+    body: { name, username, password, pin: pin || '0000', role },
+  })
+}
+
+export async function setUserActive(userId, active) {
+  return apiRequest(`/users/${userId}/active`, {
+    method: 'PATCH',
+    body: { active },
+  })
+}
+
+export async function deleteUser(userId) {
+  return apiRequest(`/users/${userId}`, {
+    method: 'DELETE',
+  })
+}
+
+export async function resetPassword(userId, newPassword) {
+  return apiRequest(`/users/${userId}/reset-password`, {
+    method: 'POST',
+    body: { password: newPassword },
+  })
+}
+
+export async function getMe() {
+  return apiRequest('/auth/me')
+}
+
+export async function updateProfile({ name, username }) {
+  return apiRequest('/auth/me', {
+    method: 'PATCH',
+    body: { name, username },
+  })
+}
+
+export async function changePassword({ currentPassword, newPassword }) {
+  return apiRequest('/auth/change-password', {
+    method: 'POST',
+    body: { currentPassword, newPassword },
+  })
+}
+
+export async function changePin({ currentPassword, newPin }) {
+  return apiRequest('/auth/change-pin', {
+    method: 'POST',
+    body: { currentPassword, newPin },
+  })
+}
+
+export async function refreshOfflineUnlock({ username, name, role, password }) {
+  const session = getStoredSession()
+  if (!session?.user) return
+  const raw = localStorage.getItem(OFFLINE_UNLOCK_KEY)
+  let previous = {}
+  if (raw) {
+    try {
+      previous = JSON.parse(raw) || {}
+    } catch {
+      previous = {}
+    }
   }
-  const user = {
-    id: `u_${Date.now()}`,
-    name,
-    username,
-    password,
-    pin: pin || '0000',
-    role,
-    active: true,
-  }
-  store.users.push(user)
-  addAudit({
-    userId: actor.id,
-    deviceId: actor.deviceId,
-    action: 'user_create',
-    record: `Created user ${username} (${role})`,
-  })
-  return publicUser(user)
+  localStorage.setItem(
+    OFFLINE_UNLOCK_KEY,
+    JSON.stringify({
+      userId: session.user.id,
+      username: username || session.user.username,
+      name: name || session.user.name,
+      role: role || session.user.role,
+      passwordHash: password ? await hashSecret(password) : previous.passwordHash,
+      unlockedUntil: previous.unlockedUntil || Date.now() + 7 * 24 * 60 * 60 * 1000,
+    }),
+  )
 }
 
-export function setUserActive(userId, active, actor) {
-  const store = getStore()
-  const user = store.users.find((u) => u.id === userId)
-  if (!user) throw new Error('User not found')
-  user.active = active
-  addAudit({
-    userId: actor.id,
-    deviceId: actor.deviceId,
-    action: 'user_update',
-    record: `${active ? 'Activated' : 'Deactivated'} user ${user.username}`,
-  })
-  return publicUser(user)
-}
-
-export function resetPassword(userId, newPassword, actor) {
-  const store = getStore()
-  const user = store.users.find((u) => u.id === userId)
-  if (!user) throw new Error('User not found')
-  user.password = newPassword
-  addAudit({
-    userId: actor.id,
-    deviceId: actor.deviceId,
-    action: 'user_update',
-    record: `Reset password for ${user.username}`,
-  })
-  return publicUser(user)
-}

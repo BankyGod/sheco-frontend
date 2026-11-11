@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { useOutletContext } from 'react-router-dom'
 import { listProducts, saveProduct } from '../api/inventory'
 import { useAuth } from '../context/AuthContext'
@@ -34,22 +34,37 @@ const emptyForm = {
 }
 
 export default function ProductsPage() {
-  const { actor, isAdmin } = useAuth()
-  const { cacheCatalogue } = useOffline()
+  const { isAdmin } = useAuth()
+  const { cacheCatalogue, getCachedCatalogue } = useOffline()
   const { search = '' } = useOutletContext() || {}
-  const [tick, setTick] = useState(0)
+  const [products, setProducts] = useState([])
+  const [loading, setLoading] = useState(true)
   const [form, setForm] = useState(emptyForm)
   const [message, setMessage] = useState('')
   const [error, setError] = useState('')
 
-  const products = useMemo(
-    () => listProducts({ includeInactive: true, forSalesperson: !isAdmin }),
-    [tick, isAdmin],
-  )
+  const refresh = useCallback(async () => {
+    setLoading(true)
+    try {
+      const rows = await listProducts({ includeInactive: isAdmin })
+      setProducts(rows)
+      await cacheCatalogue(rows)
+    } catch (err) {
+      const cached = await getCachedCatalogue()
+      if (cached?.products) {
+        setProducts(cached.products)
+        setError('Showing cached catalogue (API unavailable)')
+      } else {
+        setError(err.message)
+      }
+    } finally {
+      setLoading(false)
+    }
+  }, [isAdmin, cacheCatalogue, getCachedCatalogue])
 
   useEffect(() => {
-    cacheCatalogue(products)
-  }, [products, cacheCatalogue])
+    refresh()
+  }, [refresh])
 
   const filtered = products.filter((p) => {
     const q = search.trim().toLowerCase()
@@ -83,7 +98,7 @@ export default function ProductsPage() {
     })
   }
 
-  function handleSubmit(e) {
+  async function handleSubmit(e) {
     e.preventDefault()
     setError('')
     setMessage('')
@@ -104,8 +119,8 @@ export default function ProductsPage() {
       return
     }
 
-    saveProduct(
-      {
+    try {
+      await saveProduct({
         id: form.id || undefined,
         name: form.name,
         genericName: form.genericName,
@@ -116,12 +131,13 @@ export default function ProductsPage() {
         reorderLevel: Number(form.reorderLevel),
         prescriptionOnly: Boolean(form.prescriptionOnly),
         active: Boolean(form.active),
-      },
-      actor(),
-    )
-    setForm(emptyForm)
-    setMessage(form.id ? 'Product updated' : 'Product created')
-    setTick((t) => t + 1)
+      })
+      setForm(emptyForm)
+      setMessage(form.id ? 'Product updated' : 'Product created')
+      await refresh()
+    } catch (err) {
+      setError(err.message)
+    }
   }
 
   return (
@@ -135,81 +151,85 @@ export default function ProductsPage() {
 
       <div className="grid gap-6 xl:grid-cols-[1.3fr_0.7fr]">
         <div className="overflow-hidden rounded-2xl bg-white shadow-[var(--shadow)]">
-          <table className="w-full text-left text-sm">
-            <thead className="bg-canvas text-[var(--text-muted)]">
-              <tr>
-                <th className="px-4 py-3 font-medium">Product</th>
-                <th className="px-4 py-3 font-medium">Category</th>
-                {isAdmin ? <th className="px-4 py-3 font-medium">Cost</th> : null}
-                <th className="px-4 py-3 font-medium">Selling</th>
-                {isAdmin ? <th className="px-4 py-3 font-medium">Profit / unit</th> : null}
-                <th className="px-4 py-3 font-medium">Stock</th>
-                <th className="px-4 py-3 font-medium">Flags</th>
-                <th className="px-4 py-3 font-medium" />
-              </tr>
-            </thead>
-            <tbody>
-              {filtered.map((product) => (
-                <tr key={product.id} className="border-t border-[var(--border)]">
-                  <td className="px-4 py-3">
-                    <p className="font-medium">{product.name}</p>
-                    <p className="text-xs text-[var(--text-muted)]">{product.genericName}</p>
-                  </td>
-                  <td className="px-4 py-3">{product.category}</td>
-                  {isAdmin ? (
-                    <td className="px-4 py-3">{formatGhs(product.costPrice || 0)}</td>
-                  ) : null}
-                  <td className="px-4 py-3">{formatGhs(product.sellingPrice)}</td>
-                  {isAdmin ? (
-                    <td className="px-4 py-3 font-medium text-emerald-700">
-                      {formatGhs(product.unitProfit || 0)}
-                    </td>
-                  ) : null}
-                  <td className="px-4 py-3">
-                    <span className={product.lowStock ? 'font-semibold text-amber-600' : ''}>
-                      {product.availableQty}
-                    </span>
-                    <span className="text-[var(--text-muted)]"> / {product.unit}</span>
-                  </td>
-                  <td className="px-4 py-3">
-                    <div className="flex flex-wrap gap-1">
-                      {product.prescriptionOnly ? (
-                        <span className="rounded-full bg-hospital-light px-2 py-0.5 text-[10px] font-semibold text-hospital-dark">
-                          Rx
-                        </span>
-                      ) : null}
-                      {product.lowStock ? (
-                        <span className="rounded-full bg-amber-50 px-2 py-0.5 text-[10px] font-semibold text-amber-700">
-                          Low
-                        </span>
-                      ) : null}
-                      {product.expiringSoon ? (
-                        <span className="rounded-full bg-red-50 px-2 py-0.5 text-[10px] font-semibold text-red-600">
-                          Expiring
-                        </span>
-                      ) : null}
-                      {!product.active ? (
-                        <span className="rounded-full bg-canvas px-2 py-0.5 text-[10px] font-semibold">
-                          Inactive
-                        </span>
-                      ) : null}
-                    </div>
-                  </td>
-                  <td className="px-4 py-3">
-                    {isAdmin ? (
-                      <button
-                        type="button"
-                        className="text-xs font-semibold text-hospital-dark"
-                        onClick={() => editProduct(product)}
-                      >
-                        Edit
-                      </button>
-                    ) : null}
-                  </td>
+          {loading ? (
+            <p className="p-6 text-sm text-[var(--text-muted)]">Loading products...</p>
+          ) : (
+            <table className="w-full text-left text-sm">
+              <thead className="bg-canvas text-[var(--text-muted)]">
+                <tr>
+                  <th className="px-4 py-3 font-medium">Product</th>
+                  <th className="px-4 py-3 font-medium">Category</th>
+                  {isAdmin ? <th className="px-4 py-3 font-medium">Cost</th> : null}
+                  <th className="px-4 py-3 font-medium">Selling</th>
+                  {isAdmin ? <th className="px-4 py-3 font-medium">Profit / unit</th> : null}
+                  <th className="px-4 py-3 font-medium">Stock</th>
+                  <th className="px-4 py-3 font-medium">Flags</th>
+                  <th className="px-4 py-3 font-medium" />
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {filtered.map((product) => (
+                  <tr key={product.id} className="border-t border-[var(--border)]">
+                    <td className="px-4 py-3">
+                      <p className="font-medium">{product.name}</p>
+                      <p className="text-xs text-[var(--text-muted)]">{product.genericName}</p>
+                    </td>
+                    <td className="px-4 py-3">{product.category}</td>
+                    {isAdmin ? (
+                      <td className="px-4 py-3">{formatGhs(product.costPrice || 0)}</td>
+                    ) : null}
+                    <td className="px-4 py-3">{formatGhs(product.sellingPrice)}</td>
+                    {isAdmin ? (
+                      <td className="px-4 py-3 font-medium text-emerald-700">
+                        {formatGhs(product.unitProfit || 0)}
+                      </td>
+                    ) : null}
+                    <td className="px-4 py-3">
+                      <span className={product.lowStock ? 'font-semibold text-amber-600' : ''}>
+                        {product.availableQty}
+                      </span>
+                      <span className="text-[var(--text-muted)]"> / {product.unit}</span>
+                    </td>
+                    <td className="px-4 py-3">
+                      <div className="flex flex-wrap gap-1">
+                        {product.prescriptionOnly ? (
+                          <span className="rounded-full bg-hospital-light px-2 py-0.5 text-[10px] font-semibold text-hospital-dark">
+                            Rx
+                          </span>
+                        ) : null}
+                        {product.lowStock ? (
+                          <span className="rounded-full bg-amber-50 px-2 py-0.5 text-[10px] font-semibold text-amber-700">
+                            Low
+                          </span>
+                        ) : null}
+                        {product.expiringSoon ? (
+                          <span className="rounded-full bg-red-50 px-2 py-0.5 text-[10px] font-semibold text-red-600">
+                            Expiring
+                          </span>
+                        ) : null}
+                        {!product.active ? (
+                          <span className="rounded-full bg-canvas px-2 py-0.5 text-[10px] font-semibold">
+                            Inactive
+                          </span>
+                        ) : null}
+                      </div>
+                    </td>
+                    <td className="px-4 py-3">
+                      {isAdmin ? (
+                        <button
+                          type="button"
+                          className="text-xs font-semibold text-hospital-dark"
+                          onClick={() => editProduct(product)}
+                        >
+                          Edit
+                        </button>
+                      ) : null}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
         </div>
 
         {isAdmin ? (

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { useNavigate, useOutletContext } from 'react-router-dom'
 import { listProducts } from '../api/inventory'
 import { completeSale } from '../api/sales'
@@ -9,17 +9,11 @@ import { formatGhs, toPesewas } from '../utils/money'
 const MOMO_NETWORKS = ['MTN MoMo', 'Telecel Cash', 'AT Money']
 
 export default function PosPage() {
-  const { actor, isAdmin } = useAuth()
-  const { online, refreshQueue, cacheCatalogue } = useOffline()
+  const { isAdmin } = useAuth()
+  const { online, refreshQueue, cacheCatalogue, getCachedCatalogue, catalogueAgeLabel } = useOffline()
   const navigate = useNavigate()
   const { search = '', setSearch } = useOutletContext() || {}
-  const [tick, setTick] = useState(0)
-  const products = useMemo(() => listProducts({ forSalesperson: true }), [tick])
-
-  useEffect(() => {
-    cacheCatalogue(products)
-  }, [products, cacheCatalogue])
-
+  const [products, setProducts] = useState([])
   const [cart, setCart] = useState([])
   const [paymentMethod, setPaymentMethod] = useState('cash')
   const [amountTendered, setAmountTendered] = useState('')
@@ -27,6 +21,29 @@ export default function PosPage() {
   const [reference, setReference] = useState('')
   const [error, setError] = useState('')
   const [busy, setBusy] = useState(false)
+
+  const refresh = useCallback(async () => {
+    try {
+      const rows = await listProducts()
+      setProducts(rows)
+      await cacheCatalogue(rows)
+    } catch {
+      const cached = await getCachedCatalogue()
+      if (cached?.products) setProducts(cached.products)
+    }
+  }, [cacheCatalogue, getCachedCatalogue])
+
+  useEffect(() => {
+    refresh()
+  }, [refresh])
+
+  useEffect(() => {
+    const onSynced = () => {
+      refresh()
+    }
+    window.addEventListener('sheco:synced', onSynced)
+    return () => window.removeEventListener('sheco:synced', onSynced)
+  }, [refresh])
 
   const filtered = products.filter((p) => {
     const q = search.trim().toLowerCase()
@@ -113,31 +130,29 @@ export default function PosPage() {
 
     setBusy(true)
     try {
-      const sale = await completeSale(
-        {
-          items: cart.map((line) => ({
-            productId: line.productId,
-            quantity: line.quantity,
-            prescriptionRef: line.prescriptionRef.trim() || null,
-          })),
-          payment: {
-            method: paymentMethod,
-            amountTendered: paymentMethod === 'cash' ? tenderedPesewas : total,
-            change: paymentMethod === 'cash' ? change : 0,
-            network: paymentMethod === 'momo' ? network : null,
-            reference: paymentMethod === 'momo' ? reference.trim() : null,
-          },
-          offline: !online,
+      const sale = await completeSale({
+        items: cart.map((line) => ({
+          productId: line.productId,
+          quantity: line.quantity,
+          prescriptionRef: line.prescriptionRef.trim() || null,
+          sellingPrice: line.sellingPrice,
+        })),
+        payment: {
+          method: paymentMethod,
+          amountTendered: paymentMethod === 'cash' ? tenderedPesewas : total,
+          change: paymentMethod === 'cash' ? change : 0,
+          network: paymentMethod === 'momo' ? network : null,
+          reference: paymentMethod === 'momo' ? reference.trim() : null,
         },
-        actor(),
-      )
+        offline: !online,
+      })
       refreshQueue()
       setCart([])
       setAmountTendered('')
       setReference('')
       setSearch?.('')
-      setTick((t) => t + 1)
-      navigate(`/sales/${sale.id}`, { state: { fresh: true } })
+      await refresh()
+      navigate(`/sales/${sale.id}`, { state: { fresh: true, sale } })
     } catch (err) {
       setError(err.message)
     } finally {
@@ -151,7 +166,9 @@ export default function PosPage() {
         <h2 className="text-3xl font-semibold tracking-tight">{isAdmin ? 'Point of Sale' : 'New Sale'}</h2>
         <p className="mt-1 text-sm text-[var(--text-muted)]">
           Search products, build a cart, take cash or Mobile Money.
-          {!online ? ' Working offline — sale will queue for sync.' : ''}
+          {!online
+            ? ` Working offline — sale will queue for sync. Catalogue from ${catalogueAgeLabel}.`
+            : ''}
         </p>
       </div>
 
@@ -220,9 +237,6 @@ export default function PosPage() {
                       {formatGhs(line.sellingPrice * line.quantity)}
                     </span>
                   </div>
-                  {line.quantity > line.availableQty ? (
-                    <p className="mt-1 text-xs text-red-500">Exceeds available stock</p>
-                  ) : null}
                   {line.prescriptionOnly ? (
                     <input
                       value={line.prescriptionRef}
