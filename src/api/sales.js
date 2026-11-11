@@ -239,3 +239,10 @@ export async function updateSettings(patch) {
     body: patch,
   })
 }
+
+export async function purgeOperationalData() {
+  return apiRequest('/admin/purge-data', {
+    method: 'POST',
+    body: {},
+  })
+}

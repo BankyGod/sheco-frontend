@@ -5,7 +5,8 @@ import {
   refreshOfflineUnlock,
   updateProfile,
 } from '../api/auth'
-import { getSettings, updateSettings } from '../api/sales'
+import { getSettings, purgeOperationalData, updateSettings } from '../api/sales'
+import { saveQueuedSales, setCachedCatalogue } from '../utils/offlineStore'
 import { useAuth } from '../context/AuthContext'
 import { useOffline } from '../context/OfflineContext'
 import { getDeviceId } from '../utils/device'
@@ -426,6 +427,46 @@ export default function SettingsPage() {
             Download a backup of queued sales before clearing browser data. Sync removes only
             sales accepted by the server.
           </p>
+        </div>
+
+        <div className="space-y-3 rounded-2xl border border-red-100 bg-white p-5 shadow-[var(--shadow)] xl:col-span-2">
+          <h3 className="text-lg font-semibold text-red-700">Danger zone</h3>
+          <p className="text-sm text-[var(--text-muted)]">
+            Remove all products, batches, sales, audits, and salesperson accounts. Keeps only the
+            admin account and pharmacy settings. This cannot be undone.
+          </p>
+          <button
+            type="button"
+            disabled={saving === 'purge'}
+            onClick={async () => {
+              const ok = window.confirm(
+                'Delete ALL inventory and non-admin accounts? Only the admin login will remain.',
+              )
+              if (!ok) return
+              const typed = window.prompt('Type PURGE to confirm')
+              if (typed !== 'PURGE') {
+                setError('Purge cancelled — confirmation text did not match.')
+                return
+              }
+              setSaving('purge')
+              setError('')
+              try {
+                const result = await purgeOperationalData()
+                await saveQueuedSales([])
+                await setCachedCatalogue([])
+                flash(
+                  `Cleared pharmacy data. Admin left: ${result.adminUsername || 'admin'}. Removed ${result.usersRemoved ?? 0} user(s), ${result.products ?? 0} product(s), ${result.sales ?? 0} sale(s).`,
+                )
+              } catch (err) {
+                setError(err.message)
+              } finally {
+                setSaving('')
+              }
+            }}
+            className="rounded-xl bg-red-600 px-4 py-2.5 text-sm font-semibold text-white disabled:opacity-60"
+          >
+            {saving === 'purge' ? 'Purging...' : 'Clear inventory & non-admin accounts'}
+          </button>
         </div>
       </div>
     </div>

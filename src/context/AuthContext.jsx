@@ -1,6 +1,7 @@
-import { createContext, useContext, useMemo, useState } from 'react'
+import { createContext, useContext, useEffect, useMemo, useState } from 'react'
 import {
   clearSession,
+  getMe,
   getSession,
   login as apiLogin,
   unlockOffline as apiUnlock,
@@ -12,6 +13,35 @@ const AuthContext = createContext(null)
 
 export function AuthProvider({ children }) {
   const [session, setSession] = useState(() => getSession())
+
+  useEffect(() => {
+    let active = true
+    async function refreshMe() {
+      const current = getSession()
+      if (!current?.accessToken || current?.offlineUnlock) return
+      try {
+        const me = await getMe()
+        if (!active) return
+        const next = {
+          ...current,
+          user: {
+            ...current.user,
+            ...me,
+          },
+        }
+        saveSession(next)
+        setSession(next)
+      } catch {
+        if (!active) return
+        clearSession()
+        setSession(null)
+      }
+    }
+    refreshMe()
+    return () => {
+      active = false
+    }
+  }, [])
 
   const value = useMemo(
     () => ({
