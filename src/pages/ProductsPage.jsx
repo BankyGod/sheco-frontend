@@ -152,85 +152,177 @@ export default function ProductsPage() {
       </div>
 
       <div className="grid gap-6 xl:grid-cols-[1.3fr_0.7fr]">
-        <div className="overflow-hidden rounded-2xl bg-white shadow-[var(--shadow)]">
+        <div className="rounded-2xl bg-white shadow-[var(--shadow)] md:overflow-hidden">
           {loading ? (
             <p className="p-6 text-sm text-[var(--text-muted)]">Loading products...</p>
           ) : (
-            <table className="w-full text-left text-sm">
-              <thead className="bg-canvas text-[var(--text-muted)]">
-                <tr>
-                  <th className="px-4 py-3 font-medium">Product</th>
-                  <th className="px-4 py-3 font-medium">Category</th>
-                  {isAdmin ? <th className="px-4 py-3 font-medium">Cost</th> : null}
-                  <th className="px-4 py-3 font-medium">Selling</th>
-                  {isAdmin ? <th className="px-4 py-3 font-medium">Profit / unit</th> : null}
-                  <th className="px-4 py-3 font-medium">Stock</th>
-                  <th className="px-4 py-3 font-medium">Flags</th>
-                  <th className="px-4 py-3 font-medium" />
-                </tr>
-              </thead>
-              <tbody>
+            <>
+              <div className="space-y-3 p-3 md:hidden">
                 {filtered.map((product) => (
-                  <tr key={product.id} className="border-t border-[var(--border)]">
-                    <td className="px-4 py-3">
-                      <p className="font-medium">{product.name}</p>
-                      <p className="text-xs text-[var(--text-muted)]">{product.genericName}</p>
-                    </td>
-                    <td className="px-4 py-3">{product.category}</td>
-                    {isAdmin ? (
-                      <td className="px-4 py-3">{formatGhs(product.costPrice || 0)}</td>
-                    ) : null}
-                    <td className="px-4 py-3">{formatGhs(product.sellingPrice)}</td>
-                    {isAdmin ? (
-                      <td className="px-4 py-3 font-medium text-emerald-700">
-                        {formatGhs(product.unitProfit || 0)}
-                      </td>
-                    ) : null}
-                    <td className="px-4 py-3">
-                      <span className={product.lowStock ? 'font-semibold text-amber-600' : ''}>
-                        {product.availableQty}
-                      </span>
-                      <span className="text-[var(--text-muted)]"> / {product.unit}</span>
-                    </td>
-                    <td className="px-4 py-3">
-                      <div className="flex flex-wrap gap-1">
-                        {product.prescriptionOnly ? (
-                          <span className="rounded-full bg-hospital-light px-2 py-0.5 text-[10px] font-semibold text-hospital-dark">
-                            Rx
-                          </span>
-                        ) : null}
-                        {product.lowStock ? (
-                          <span className="rounded-full bg-amber-50 px-2 py-0.5 text-[10px] font-semibold text-amber-700">
-                            Low
-                          </span>
-                        ) : null}
-                        {product.expiringSoon ? (
-                          <span className="rounded-full bg-red-50 px-2 py-0.5 text-[10px] font-semibold text-red-600">
-                            Expiring
-                          </span>
-                        ) : null}
-                        {!product.active ? (
-                          <span className="rounded-full bg-canvas px-2 py-0.5 text-[10px] font-semibold">
-                            Inactive
-                          </span>
-                        ) : null}
+                  <article
+                    key={product.id}
+                    className="rounded-2xl border border-[var(--border)] p-4"
+                  >
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="min-w-0">
+                        <p className="font-semibold text-[var(--text)]">{product.name}</p>
+                        <p className="text-xs text-[var(--text-muted)]">{product.genericName}</p>
+                        <p className="mt-1 text-xs font-medium text-hospital-dark">
+                          {product.category}
+                        </p>
                       </div>
-                    </td>
-                    <td className="px-4 py-3">
                       {isAdmin ? (
                         <button
                           type="button"
-                          className="text-xs font-semibold text-hospital-dark"
+                          className="shrink-0 rounded-lg bg-hospital-light px-3 py-1.5 text-xs font-semibold text-hospital-dark"
                           onClick={() => editProduct(product)}
                         >
                           Edit
                         </button>
                       ) : null}
-                    </td>
-                  </tr>
+                    </div>
+
+                    <div className="mt-3 grid grid-cols-2 gap-2 text-sm">
+                      {isAdmin ? (
+                        <div className="rounded-xl bg-canvas px-3 py-2">
+                          <p className="text-[10px] uppercase tracking-wide text-[var(--text-muted)]">
+                            Cost
+                          </p>
+                          <p className="font-medium">{formatGhs(product.costPrice || 0)}</p>
+                        </div>
+                      ) : null}
+                      <div className="rounded-xl bg-canvas px-3 py-2">
+                        <p className="text-[10px] uppercase tracking-wide text-[var(--text-muted)]">
+                          Selling
+                        </p>
+                        <p className="font-medium">{formatGhs(product.sellingPrice)}</p>
+                      </div>
+                      {isAdmin ? (
+                        <div className="rounded-xl bg-canvas px-3 py-2">
+                          <p className="text-[10px] uppercase tracking-wide text-[var(--text-muted)]">
+                            Profit / unit
+                          </p>
+                          <p className="font-medium text-emerald-700">
+                            {formatGhs(product.unitProfit || 0)}
+                          </p>
+                        </div>
+                      ) : null}
+                      <div className="rounded-xl bg-canvas px-3 py-2">
+                        <p className="text-[10px] uppercase tracking-wide text-[var(--text-muted)]">
+                          Stock
+                        </p>
+                        <p className={product.lowStock ? 'font-semibold text-amber-600' : 'font-medium'}>
+                          {product.availableQty}
+                          <span className="font-normal text-[var(--text-muted)]"> / {product.unit}</span>
+                        </p>
+                      </div>
+                    </div>
+
+                    <div className="mt-3 flex flex-wrap gap-1.5">
+                      {product.prescriptionOnly ? (
+                        <span className="rounded-full bg-hospital-light px-2 py-0.5 text-[10px] font-semibold text-hospital-dark">
+                          Rx
+                        </span>
+                      ) : null}
+                      {product.lowStock ? (
+                        <span className="rounded-full bg-amber-50 px-2 py-0.5 text-[10px] font-semibold text-amber-700">
+                          Low
+                        </span>
+                      ) : null}
+                      {product.expiringSoon ? (
+                        <span className="rounded-full bg-red-50 px-2 py-0.5 text-[10px] font-semibold text-red-600">
+                          Expiring
+                        </span>
+                      ) : null}
+                      {!product.active ? (
+                        <span className="rounded-full bg-canvas px-2 py-0.5 text-[10px] font-semibold">
+                          Inactive
+                        </span>
+                      ) : null}
+                    </div>
+                  </article>
                 ))}
-              </tbody>
-            </table>
+                {!filtered.length ? (
+                  <p className="px-1 py-4 text-sm text-[var(--text-muted)]">No products found.</p>
+                ) : null}
+              </div>
+
+              <table className="hidden w-full text-left text-sm md:table">
+                <thead className="bg-canvas text-[var(--text-muted)]">
+                  <tr>
+                    <th className="px-4 py-3 font-medium">Product</th>
+                    <th className="px-4 py-3 font-medium">Category</th>
+                    {isAdmin ? <th className="px-4 py-3 font-medium">Cost</th> : null}
+                    <th className="px-4 py-3 font-medium">Selling</th>
+                    {isAdmin ? <th className="px-4 py-3 font-medium">Profit / unit</th> : null}
+                    <th className="px-4 py-3 font-medium">Stock</th>
+                    <th className="px-4 py-3 font-medium">Flags</th>
+                    <th className="px-4 py-3 font-medium" />
+                  </tr>
+                </thead>
+                <tbody>
+                  {filtered.map((product) => (
+                    <tr key={product.id} className="border-t border-[var(--border)]">
+                      <td className="px-4 py-3">
+                        <p className="font-medium">{product.name}</p>
+                        <p className="text-xs text-[var(--text-muted)]">{product.genericName}</p>
+                      </td>
+                      <td className="px-4 py-3">{product.category}</td>
+                      {isAdmin ? (
+                        <td className="px-4 py-3">{formatGhs(product.costPrice || 0)}</td>
+                      ) : null}
+                      <td className="px-4 py-3">{formatGhs(product.sellingPrice)}</td>
+                      {isAdmin ? (
+                        <td className="px-4 py-3 font-medium text-emerald-700">
+                          {formatGhs(product.unitProfit || 0)}
+                        </td>
+                      ) : null}
+                      <td className="px-4 py-3">
+                        <span className={product.lowStock ? 'font-semibold text-amber-600' : ''}>
+                          {product.availableQty}
+                        </span>
+                        <span className="text-[var(--text-muted)]"> / {product.unit}</span>
+                      </td>
+                      <td className="px-4 py-3">
+                        <div className="flex flex-wrap gap-1">
+                          {product.prescriptionOnly ? (
+                            <span className="rounded-full bg-hospital-light px-2 py-0.5 text-[10px] font-semibold text-hospital-dark">
+                              Rx
+                            </span>
+                          ) : null}
+                          {product.lowStock ? (
+                            <span className="rounded-full bg-amber-50 px-2 py-0.5 text-[10px] font-semibold text-amber-700">
+                              Low
+                            </span>
+                          ) : null}
+                          {product.expiringSoon ? (
+                            <span className="rounded-full bg-red-50 px-2 py-0.5 text-[10px] font-semibold text-red-600">
+                              Expiring
+                            </span>
+                          ) : null}
+                          {!product.active ? (
+                            <span className="rounded-full bg-canvas px-2 py-0.5 text-[10px] font-semibold">
+                              Inactive
+                            </span>
+                          ) : null}
+                        </div>
+                      </td>
+                      <td className="px-4 py-3">
+                        {isAdmin ? (
+                          <button
+                            type="button"
+                            className="text-xs font-semibold text-hospital-dark"
+                            onClick={() => editProduct(product)}
+                          >
+                            Edit
+                          </button>
+                        ) : null}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </>
           )}
         </div>
 

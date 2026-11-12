@@ -195,18 +195,20 @@ export default function DashboardPage() {
         </p>
       ) : null}
 
-      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+      <div className="grid grid-cols-2 gap-3 md:gap-4 xl:grid-cols-4">
         <StatCard
           label={salesLabel}
           value={stats.todayCount}
           trend={`Completed sales · ${periodMeta.label}`}
           icon={ShoppingBag}
+          compact
         />
         <StatCard
           label={revenueLabel}
           value={formatGhs(stats.todayRevenue)}
           trend={`Cash ${formatGhs(stats.cashRevenue)} · MoMo ${formatGhs(stats.momoRevenue)}`}
           icon={CircleDollarSign}
+          compact
         />
         <StatCard
           label="Low Stock Items"
@@ -214,6 +216,7 @@ export default function DashboardPage() {
           trend="At or below reorder level"
           icon={PackageMinus}
           accent="warning"
+          compact
         />
         <StatCard
           label="Expiring Soon"
@@ -221,6 +224,7 @@ export default function DashboardPage() {
           trend="Within 90 days"
           icon={TriangleAlert}
           accent="danger"
+          compact
         />
       </div>
 
