@@ -138,7 +138,13 @@ export default function LoginPage() {
   }
 
   return (
-    <div className="relative flex min-h-screen items-center justify-center overflow-hidden px-4">
+    <div
+      className="relative flex min-h-dvh items-center justify-center overflow-hidden px-4"
+      style={{
+        paddingTop: 'max(1rem, env(safe-area-inset-top))',
+        paddingBottom: 'max(1rem, env(safe-area-inset-bottom))',
+      }}
+    >
       <div
         className="absolute inset-0 bg-cover bg-center"
         style={{ backgroundImage: "url('/login-pharmacy-bg.jpg')" }}

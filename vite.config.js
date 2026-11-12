@@ -20,7 +20,9 @@ export default defineConfig({
         theme_color: '#4A9BCF',
         background_color: '#F3F4F7',
         display: 'standalone',
+        orientation: 'any',
         start_url: '/',
+        scope: '/',
         icons: [
           {
             src: '/favicon.svg',

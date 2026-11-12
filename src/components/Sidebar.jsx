@@ -1,34 +1,7 @@
 import { NavLink } from 'react-router-dom'
-import {
-  LayoutDashboard,
-  ShoppingCart,
-  Package,
-  Boxes,
-  Users,
-  BarChart3,
-  ScrollText,
-  Settings,
-  Plus,
-  AlertTriangle,
-} from 'lucide-react'
+import { Plus } from 'lucide-react'
 import { useAuth } from '../context/AuthContext'
-
-const adminLinks = [
-  { to: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
-  { to: '/sales', label: 'Sales', icon: ShoppingCart },
-  { to: '/needs-review', label: 'Needs review', icon: AlertTriangle },
-  { to: '/products', label: 'Products', icon: Package },
-  { to: '/inventory', label: 'Inventory', icon: Boxes },
-  { to: '/users', label: 'Users', icon: Users },
-  { to: '/reports', label: 'Reports', icon: BarChart3 },
-  { to: '/audit', label: 'Audit Log', icon: ScrollText },
-  { to: '/settings', label: 'Settings', icon: Settings },
-]
-
-const salesLinks = [
-  { to: '/pos', label: 'New Sale', icon: ShoppingCart },
-  { to: '/sales', label: 'My Sales', icon: ScrollText },
-]
+import { adminLinks, salesLinks } from '../nav'
 
 export default function Sidebar() {
   const { isAdmin, user } = useAuth()

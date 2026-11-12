@@ -3,6 +3,7 @@ import { Link, useLocation, useParams } from 'react-router-dom'
 import { getSale, getQueuedSales } from '../api/sales'
 import { formatGhs } from '../utils/money'
 import { listProducts } from '../api/inventory'
+import { getCachedCatalogue } from '../utils/offlineStore'
 
 export default function ReceiptPage() {
   const { id } = useParams()
@@ -20,7 +21,6 @@ export default function ReceiptPage() {
         try {
           productRows = await listProducts({ includeInactive: true })
         } catch {
-          const { getCachedCatalogue } = await import('../utils/offlineStore')
           productRows = (await getCachedCatalogue())?.products || []
         }
         if (!active) return

@@ -57,26 +57,26 @@ export default function TopBar({ searchValue = '', onSearchChange, searchPlaceho
   }
 
   return (
-    <header className="flex flex-wrap items-center gap-3 px-1 py-1" ref={wrapRef}>
-      <div className="relative min-w-[200px] flex-1">
+    <header className="flex items-center gap-2 px-0.5 py-0.5 md:gap-3 md:py-1" ref={wrapRef}>
+      <div className="relative min-w-0 flex-1">
         <Search
-          className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-[var(--text-muted)]"
+          className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-[var(--text-muted)] md:left-4"
           size={18}
         />
         <input
           value={searchValue}
           onChange={(e) => onSearchChange?.(e.target.value)}
           placeholder={searchPlaceholder}
-          className="w-full rounded-full border border-transparent bg-white py-3 pl-11 pr-4 text-sm shadow-[var(--shadow)] outline-none focus:border-hospital"
+          className="w-full rounded-2xl border border-transparent bg-white py-2.5 pl-10 pr-3 text-sm shadow-[var(--shadow)] outline-none focus:border-hospital md:rounded-full md:py-3 md:pl-11 md:pr-4"
         />
       </div>
 
-      <div className="flex items-center gap-2">
+      <div className="flex shrink-0 items-center gap-1.5 md:gap-2">
         <button
           type="button"
           onClick={() => syncNow()}
           disabled={syncing}
-          className={`inline-flex items-center gap-2 rounded-full px-3 py-2 text-xs font-semibold transition disabled:opacity-60 ${
+          className={`inline-flex h-11 items-center gap-1.5 rounded-2xl px-2.5 text-xs font-semibold transition disabled:opacity-60 md:rounded-full md:px-3 md:py-2 ${
             online
               ? 'bg-emerald-50 text-emerald-700 hover:bg-emerald-100'
               : 'bg-red-50 text-red-600 hover:bg-red-100'
@@ -92,7 +92,7 @@ export default function TopBar({ searchValue = '', onSearchChange, searchPlaceho
             {syncing ? 'Syncing...' : online ? 'Online' : 'Offline'}
           </span>
           {queueCount > 0 ? (
-            <span className="inline-flex items-center gap-1 rounded-full bg-white/90 px-2 py-0.5">
+            <span className="inline-flex items-center gap-1 rounded-full bg-white/90 px-1.5 py-0.5 md:px-2">
               <CloudUpload size={12} /> {queueCount}
             </span>
           ) : null}
@@ -104,7 +104,7 @@ export default function TopBar({ searchValue = '', onSearchChange, searchPlaceho
             onClick={() => toggle('notifications')}
             aria-expanded={openPanel === 'notifications'}
             aria-label="Notifications"
-            className={`relative flex h-11 w-11 items-center justify-center rounded-full transition ${
+            className={`relative flex h-11 w-11 items-center justify-center rounded-2xl transition md:rounded-full ${
               openPanel === 'notifications'
                 ? 'bg-hospital text-white'
                 : 'bg-white text-hospital-dark shadow-[var(--shadow)] hover:bg-hospital-light'
@@ -119,7 +119,7 @@ export default function TopBar({ searchValue = '', onSearchChange, searchPlaceho
           </button>
 
           {openPanel === 'notifications' ? (
-            <div className="absolute right-0 z-40 mt-2 w-[320px] overflow-hidden rounded-2xl border border-[var(--border)] bg-white shadow-[0_18px_50px_rgba(15,23,42,0.12)]">
+            <div className="absolute right-0 z-40 mt-2 w-[min(320px,calc(100vw-1.5rem))] overflow-hidden rounded-2xl border border-[var(--border)] bg-white shadow-[0_18px_50px_rgba(15,23,42,0.12)]">
               <div className="border-b border-[var(--border)] px-4 py-3">
                 <p className="text-sm font-semibold">Notifications</p>
                 <p className="text-xs text-[var(--text-muted)]">Device sync and sales alerts</p>

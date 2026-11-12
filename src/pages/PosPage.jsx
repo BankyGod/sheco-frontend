@@ -190,15 +190,15 @@ export default function PosPage() {
         </p>
       </div>
 
-      <div className="grid gap-6 xl:grid-cols-[1.3fr_0.9fr]">
-        <div className="rounded-2xl bg-white p-4 shadow-[var(--shadow)]">
-          <div className="grid gap-3 sm:grid-cols-2">
+      <div className="grid gap-4 xl:grid-cols-[1.3fr_0.9fr] xl:gap-6">
+        <div className="order-2 rounded-2xl bg-white p-3 shadow-[var(--shadow)] sm:p-4 xl:order-1">
+          <div className="grid grid-cols-1 gap-3 min-[420px]:grid-cols-2">
             {filtered.map((product) => (
               <button
                 key={product.id}
                 type="button"
                 onClick={() => addToCart(product)}
-                className="rounded-2xl border border-[var(--border)] p-4 text-left transition hover:border-hospital hover:bg-hospital-light/40"
+                className="rounded-2xl border border-[var(--border)] p-3.5 text-left transition active:scale-[0.99] hover:border-hospital hover:bg-hospital-light/40 sm:p-4"
               >
                 <div className="flex items-start justify-between gap-2">
                   <div>
@@ -222,7 +222,7 @@ export default function PosPage() {
           </div>
         </div>
 
-        <div className="space-y-4 rounded-2xl bg-white p-5 shadow-[var(--shadow)]">
+        <div className="order-1 space-y-4 rounded-2xl bg-white p-4 shadow-[var(--shadow)] sm:p-5 xl:order-2 xl:sticky xl:top-24 xl:self-start">
           <h3 className="text-lg font-semibold">Cart</h3>
           {!cart.length ? (
             <p className="text-sm text-[var(--text-muted)]">No items yet.</p>
@@ -346,7 +346,7 @@ export default function PosPage() {
             type="button"
             disabled={busy}
             onClick={checkout}
-            className="w-full rounded-xl bg-hospital py-3 font-semibold text-white disabled:opacity-60"
+            className="w-full rounded-2xl bg-hospital py-3.5 text-base font-semibold text-white shadow-[0_10px_24px_rgba(46,123,168,0.28)] disabled:opacity-60"
           >
             {busy ? 'Processing...' : online ? 'Complete sale' : 'Complete offline sale'}
           </button>
