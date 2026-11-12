@@ -1,11 +1,13 @@
 import { useCallback, useEffect, useState } from 'react'
 import { adjustStock, getStockAlerts, listProducts, restock } from '../api/inventory'
 import { formatGhs, fromPesewas } from '../utils/money'
+import { getCachedAlerts, getCachedCatalogue } from '../utils/offlineStore'
 
 export default function InventoryPage() {
   const [products, setProducts] = useState([])
   const [alerts, setAlerts] = useState({ lowStock: [], expiringSoon: [], expired: [] })
   const [loading, setLoading] = useState(true)
+  const [fromCache, setFromCache] = useState(false)
   const [restockForm, setRestockForm] = useState({
     productId: '',
     batchNumber: '',
@@ -24,6 +26,7 @@ export default function InventoryPage() {
 
   const refresh = useCallback(async () => {
     setLoading(true)
+    setError('')
     try {
       const [productRows, alertRows] = await Promise.all([
         listProducts({ includeInactive: false }),
@@ -31,8 +34,20 @@ export default function InventoryPage() {
       ])
       setProducts(productRows)
       setAlerts(alertRows)
+      setFromCache(false)
     } catch (err) {
-      setError(err.message)
+      const [cachedProducts, cachedAlerts] = await Promise.all([
+        getCachedCatalogue(),
+        getCachedAlerts(),
+      ])
+      if (cachedProducts?.products?.length || cachedAlerts?.alerts) {
+        setProducts(cachedProducts?.products || [])
+        setAlerts(cachedAlerts?.alerts || { lowStock: [], expiringSoon: [], expired: [] })
+        setFromCache(true)
+        setError('')
+      } else {
+        setError(err.message || 'No saved inventory on this device yet.')
+      }
     } finally {
       setLoading(false)
     }
@@ -84,6 +99,11 @@ export default function InventoryPage() {
 
   return (
     <div className="space-y-6">
+      {fromCache ? (
+        <p className="rounded-xl bg-amber-50 px-4 py-3 text-sm text-amber-800">
+          Showing saved inventory on this device. Restock and adjustments need an online session.
+        </p>
+      ) : null}
       <div>
         <h2 className="text-3xl font-semibold tracking-tight">Inventory</h2>
         <p className="mt-1 text-sm text-[var(--text-muted)]">

@@ -2,10 +2,12 @@ import { useCallback, useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { clearSaleReview, listSalesNeedingReview } from '../api/sales'
 import { formatGhs } from '../utils/money'
+import { getCachedSales } from '../utils/offlineStore'
 
 export default function NeedsReviewPage() {
   const [sales, setSales] = useState([])
   const [loading, setLoading] = useState(true)
+  const [fromCache, setFromCache] = useState(false)
   const [error, setError] = useState('')
   const [message, setMessage] = useState('')
   const [busyId, setBusyId] = useState('')
@@ -14,9 +16,18 @@ export default function NeedsReviewPage() {
     setLoading(true)
     try {
       setSales(await listSalesNeedingReview())
+      setFromCache(false)
       setError('')
     } catch (err) {
-      setError(err.message)
+      const cached = await getCachedSales()
+      const rows = (cached?.sales || []).filter((sale) => sale.needsReview)
+      if (rows.length || cached?.sales) {
+        setSales(rows)
+        setFromCache(true)
+        setError('')
+      } else {
+        setError(err.message)
+      }
     } finally {
       setLoading(false)
     }
@@ -55,6 +66,11 @@ export default function NeedsReviewPage() {
         </p>
       </div>
 
+      {fromCache ? (
+        <p className="rounded-xl bg-amber-50 px-4 py-3 text-sm text-amber-800">
+          Showing saved review flags on this device. Clearing reviews needs an online session.
+        </p>
+      ) : null}
       {loading ? <p className="text-sm text-[var(--text-muted)]">Loading...</p> : null}
       {error ? <p className="text-sm text-red-500">{error}</p> : null}
       {message ? <p className="text-sm text-emerald-600">{message}</p> : null}

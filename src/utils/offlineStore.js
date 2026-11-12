@@ -6,7 +6,29 @@ const LEGACY_QUEUE_KEY = 'sheco_sales_queue'
 const LEGACY_CATALOGUE_KEY = 'sheco_catalogue_cache'
 const CATALOGUE_META_KEY = 'catalogue'
 const DASHBOARD_META_KEY = 'dashboard'
+const SALES_META_KEY = 'sales'
+const USERS_META_KEY = 'users'
+const ALERTS_META_KEY = 'alerts'
+const SETTINGS_META_KEY = 'settings'
+const AUDIT_META_KEY = 'audit'
+const REPORT_META_KEY = 'report'
 const SYNC_TAG = 'sheco-sales-sync'
+
+async function setMeta(key, payload, savedAt = new Date().toISOString()) {
+  await withStore(META_STORE, 'readwrite', (store) => {
+    store.put({
+      key,
+      savedAt,
+      ...payload,
+    })
+  })
+  return savedAt
+}
+
+async function getMeta(key) {
+  await migrateLegacyOfflineData()
+  return withStore(META_STORE, 'readonly', (store) => requestToPromise(store.get(key)))
+}
 
 function openDb() {
   return new Promise((resolve, reject) => {
@@ -152,20 +174,11 @@ export async function getCachedCatalogue() {
 }
 
 export async function setCachedDashboard(payload, savedAt = new Date().toISOString()) {
-  await withStore(META_STORE, 'readwrite', (store) => {
-    store.put({
-      key: DASHBOARD_META_KEY,
-      savedAt,
-      ...payload,
-    })
-  })
+  await setMeta(DASHBOARD_META_KEY, payload, savedAt)
 }
 
 export async function getCachedDashboard() {
-  await migrateLegacyOfflineData()
-  const row = await withStore(META_STORE, 'readonly', (store) =>
-    requestToPromise(store.get(DASHBOARD_META_KEY)),
-  )
+  const row = await getMeta(DASHBOARD_META_KEY)
   if (!row) return null
   return {
     savedAt: row.savedAt,
@@ -174,6 +187,82 @@ export async function getCachedDashboard() {
     recentSales: row.recentSales || [],
     users: row.users || [],
   }
+}
+
+export async function setCachedSales(sales, savedAt = new Date().toISOString()) {
+  await setMeta(SALES_META_KEY, { sales: sales || [] }, savedAt)
+}
+
+export async function getCachedSales() {
+  const row = await getMeta(SALES_META_KEY)
+  if (!row) return null
+  return { savedAt: row.savedAt, sales: row.sales || [] }
+}
+
+export async function upsertCachedSale(sale) {
+  const cached = (await getCachedSales()) || { sales: [], savedAt: new Date().toISOString() }
+  const sales = [...(cached.sales || []).filter((s) => s.id !== sale.id), sale].sort((a, b) =>
+    String(b.createdAt).localeCompare(String(a.createdAt)),
+  )
+  await setCachedSales(sales, cached.savedAt)
+  return sales
+}
+
+export async function setCachedUsers(users, savedAt = new Date().toISOString()) {
+  await setMeta(USERS_META_KEY, { users: users || [] }, savedAt)
+}
+
+export async function getCachedUsers() {
+  const row = await getMeta(USERS_META_KEY)
+  if (!row) return null
+  return { savedAt: row.savedAt, users: row.users || [] }
+}
+
+export async function setCachedAlerts(alerts, savedAt = new Date().toISOString()) {
+  await setMeta(
+    ALERTS_META_KEY,
+    { alerts: alerts || { lowStock: [], expiringSoon: [], expired: [] } },
+    savedAt,
+  )
+}
+
+export async function getCachedAlerts() {
+  const row = await getMeta(ALERTS_META_KEY)
+  if (!row) return null
+  return {
+    savedAt: row.savedAt,
+    alerts: row.alerts || { lowStock: [], expiringSoon: [], expired: [] },
+  }
+}
+
+export async function setCachedSettings(settings, savedAt = new Date().toISOString()) {
+  await setMeta(SETTINGS_META_KEY, { settings }, savedAt)
+}
+
+export async function getCachedSettings() {
+  const row = await getMeta(SETTINGS_META_KEY)
+  if (!row) return null
+  return { savedAt: row.savedAt, settings: row.settings || null }
+}
+
+export async function setCachedAudit(entries, savedAt = new Date().toISOString()) {
+  await setMeta(AUDIT_META_KEY, { entries: entries || [] }, savedAt)
+}
+
+export async function getCachedAudit() {
+  const row = await getMeta(AUDIT_META_KEY)
+  if (!row) return null
+  return { savedAt: row.savedAt, entries: row.entries || [] }
+}
+
+export async function setCachedReport(report, savedAt = new Date().toISOString()) {
+  await setMeta(REPORT_META_KEY, { report }, savedAt)
+}
+
+export async function getCachedReport() {
+  const row = await getMeta(REPORT_META_KEY)
+  if (!row) return null
+  return { savedAt: row.savedAt, report: row.report || null }
 }
 
 export async function applyOptimisticStock(items) {

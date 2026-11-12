@@ -1,11 +1,13 @@
 import { useEffect, useState } from 'react'
 import { listAuditLog } from '../api/sales'
+import { getCachedAudit } from '../utils/offlineStore'
 
 export default function AuditPage() {
   const [query, setQuery] = useState('')
   const [entries, setEntries] = useState([])
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(true)
+  const [fromCache, setFromCache] = useState(false)
 
   useEffect(() => {
     let active = true
@@ -15,10 +17,26 @@ export default function AuditPage() {
         const rows = await listAuditLog(query)
         if (active) {
           setEntries(rows)
+          setFromCache(false)
           setError('')
         }
       } catch (err) {
-        if (active) setError(err.message)
+        if (!active) return
+        const cached = await getCachedAudit()
+        if (cached?.entries?.length) {
+          const q = query.trim().toLowerCase()
+          setEntries(
+            q
+              ? cached.entries.filter((row) =>
+                  JSON.stringify(row).toLowerCase().includes(q),
+                )
+              : cached.entries,
+          )
+          setFromCache(true)
+          setError('')
+        } else {
+          setError(err.message)
+        }
       } finally {
         if (active) setLoading(false)
       }
@@ -46,6 +64,11 @@ export default function AuditPage() {
         className="w-full max-w-lg rounded-xl border border-[var(--border)] bg-white px-4 py-3 shadow-[var(--shadow)] outline-none focus:border-hospital"
       />
 
+      {fromCache ? (
+        <p className="rounded-xl bg-amber-50 px-4 py-3 text-sm text-amber-800">
+          Showing saved audit entries on this device.
+        </p>
+      ) : null}
       {error ? <p className="text-sm text-red-500">{error}</p> : null}
 
       <div className="overflow-hidden rounded-2xl bg-white shadow-[var(--shadow)]">

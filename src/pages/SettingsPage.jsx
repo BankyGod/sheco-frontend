@@ -6,7 +6,7 @@ import {
   updateProfile,
 } from '../api/auth'
 import { getSettings, purgeOperationalData, updateSettings } from '../api/sales'
-import { saveQueuedSales, setCachedCatalogue } from '../utils/offlineStore'
+import { getCachedSettings, saveQueuedSales, setCachedCatalogue } from '../utils/offlineStore'
 import { useAuth } from '../context/AuthContext'
 import { useOffline } from '../context/OfflineContext'
 import { getDeviceId } from '../utils/device'
@@ -51,8 +51,15 @@ export default function SettingsPage() {
       .then((rows) => {
         if (active) setSettings(rows)
       })
-      .catch((err) => {
-        if (active) setError(err.message)
+      .catch(async (err) => {
+        const cached = await getCachedSettings()
+        if (!active) return
+        if (cached?.settings) {
+          setSettings(cached.settings)
+          setError('Showing saved settings on this device (offline).')
+        } else {
+          setError(err.message)
+        }
       })
     return () => {
       active = false

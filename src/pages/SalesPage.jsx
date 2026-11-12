@@ -4,6 +4,16 @@ import { getQueuedSales, listSales, voidSale } from '../api/sales'
 import { listUsers } from '../api/auth'
 import { useAuth } from '../context/AuthContext'
 import { formatGhs } from '../utils/money'
+import { getCachedSales, getCachedUsers, setCachedSales } from '../utils/offlineStore'
+
+function mergeSales(serverRows, queuedRows) {
+  const byId = new Map()
+  for (const sale of serverRows || []) byId.set(sale.id, sale)
+  for (const sale of queuedRows || []) {
+    if (!byId.has(sale.id)) byId.set(sale.id, { ...sale, status: sale.status || 'queued' })
+  }
+  return [...byId.values()].sort((a, b) => String(b.createdAt).localeCompare(String(a.createdAt)))
+}
 
 export default function SalesPage() {
   const { isAdmin } = useAuth()
@@ -11,6 +21,7 @@ export default function SalesPage() {
   const [sales, setSales] = useState([])
   const [users, setUsers] = useState([])
   const [loading, setLoading] = useState(true)
+  const [fromCache, setFromCache] = useState(false)
   const [voidingId, setVoidingId] = useState(null)
   const [reason, setReason] = useState('')
   const [error, setError] = useState('')
@@ -18,19 +29,29 @@ export default function SalesPage() {
   const refresh = useCallback(async () => {
     setLoading(true)
     try {
-      const [saleRows, userRows, queued] = await Promise.all([
-        listSales().catch(() => []),
-        isAdmin ? listUsers() : Promise.resolve([]),
-        getQueuedSales(),
-      ])
-      const byId = new Map()
-      for (const sale of saleRows) byId.set(sale.id, sale)
-      for (const sale of queued) {
-        if (!byId.has(sale.id)) byId.set(sale.id, { ...sale, status: sale.status || 'queued' })
+      const queued = await getQueuedSales()
+      try {
+        const [saleRows, userRows] = await Promise.all([
+          listSales(),
+          isAdmin ? listUsers() : Promise.resolve([]),
+        ])
+        const merged = mergeSales(saleRows, queued)
+        setSales(merged)
+        setUsers(userRows)
+        setFromCache(false)
+        setError('')
+        await setCachedSales(merged)
+      } catch {
+        const [cachedSales, cachedUsers] = await Promise.all([
+          getCachedSales(),
+          isAdmin ? getCachedUsers() : Promise.resolve(null),
+        ])
+        const merged = mergeSales(cachedSales?.sales || [], queued)
+        setSales(merged)
+        setUsers(cachedUsers?.users || [])
+        setFromCache(true)
+        setError('')
       }
-      setSales([...byId.values()].sort((a, b) => String(b.createdAt).localeCompare(String(a.createdAt))))
-      setUsers(userRows)
-      setError('')
     } catch (err) {
       setError(err.message)
     } finally {
@@ -74,10 +95,17 @@ export default function SalesPage() {
         </Link>
       </div>
 
+      {fromCache ? (
+        <p className="rounded-xl bg-amber-50 px-4 py-3 text-sm text-amber-800">
+          Showing saved sales on this device. Queued offline sales are included and will sync when
+          you sign in online.
+        </p>
+      ) : null}
+
       <div className="overflow-hidden rounded-2xl bg-white shadow-[var(--shadow)]">
         {loading ? (
           <p className="p-6 text-sm text-[var(--text-muted)]">Loading sales...</p>
-        ) : (
+        ) : filtered.length ? (
           <table className="w-full text-left text-sm">
             <thead className="bg-canvas text-[var(--text-muted)]">
               <tr>
@@ -129,11 +157,12 @@ export default function SalesPage() {
                       <div className="flex flex-wrap items-center gap-2">
                         <Link
                           to={`/sales/${sale.id}`}
+                          state={{ sale }}
                           className="inline-flex items-center rounded-lg border border-hospital-soft bg-hospital-light px-3 py-1.5 text-xs font-semibold text-hospital-dark transition hover:bg-hospital hover:text-white"
                         >
                           Receipt
                         </Link>
-                        {isAdmin && sale.status === 'completed' && sale.syncFlag !== 'queued' ? (
+                        {isAdmin && sale.status === 'completed' && sale.syncFlag !== 'queued' && !fromCache ? (
                           <button
                             type="button"
                             className="inline-flex items-center rounded-lg border border-red-200 bg-red-50 px-3 py-1.5 text-xs font-semibold text-red-600 transition hover:bg-red-500 hover:text-white"
@@ -149,6 +178,11 @@ export default function SalesPage() {
               })}
             </tbody>
           </table>
+        ) : (
+          <p className="p-6 text-sm text-[var(--text-muted)]">
+            No sales saved on this device yet. Open Sales once while online, or complete an offline
+            sale from POS.
+          </p>
         )}
       </div>
 

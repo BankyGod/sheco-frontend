@@ -5,6 +5,7 @@ import {
   saveSession,
 } from './client'
 import { getDeviceId } from '../utils/device'
+import { setCachedUsers } from '../utils/offlineStore'
 
 const OFFLINE_UNLOCK_KEY = 'sheco_offline_unlock'
 
@@ -155,7 +156,13 @@ export async function unlockOffline(username, pin) {
 }
 
 export async function listUsers() {
-  return apiRequest('/users')
+  const rows = await apiRequest('/users')
+  try {
+    await setCachedUsers(rows)
+  } catch {
+    /* ignore */
+  }
+  return rows
 }
 
 export async function createUser({ name, username, password, pin, role }) {

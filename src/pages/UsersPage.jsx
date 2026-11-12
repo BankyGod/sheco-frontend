@@ -7,10 +7,12 @@ import {
   ROLES,
   setUserActive,
 } from '../api/auth'
+import { getCachedUsers } from '../utils/offlineStore'
 
 export default function UsersPage() {
   const [users, setUsers] = useState([])
   const [loading, setLoading] = useState(true)
+  const [fromCache, setFromCache] = useState(false)
   const [form, setForm] = useState({
     name: '',
     username: '',
@@ -23,10 +25,19 @@ export default function UsersPage() {
 
   const refresh = useCallback(async () => {
     setLoading(true)
+    setError('')
     try {
       setUsers(await listUsers())
+      setFromCache(false)
     } catch (err) {
-      setError(err.message)
+      const cached = await getCachedUsers()
+      if (cached?.users?.length) {
+        setUsers(cached.users)
+        setFromCache(true)
+      } else {
+        setUsers([])
+        setError(err.message || 'No saved users on this device yet.')
+      }
     } finally {
       setLoading(false)
     }
@@ -59,6 +70,12 @@ export default function UsersPage() {
           records for accounting.
         </p>
       </div>
+
+      {fromCache ? (
+        <p className="rounded-xl bg-amber-50 px-4 py-3 text-sm text-amber-800">
+          Showing saved users on this device. User changes require an online session.
+        </p>
+      ) : null}
 
       <div className="grid gap-6 xl:grid-cols-[1.2fr_0.8fr]">
         <div className="overflow-hidden rounded-2xl bg-white shadow-[var(--shadow)]">

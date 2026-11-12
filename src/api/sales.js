@@ -6,6 +6,11 @@ import {
   getQueuedSales as getQueuedFromStore,
   removeQueuedSales,
   updateQueuedSale,
+  upsertCachedSale,
+  setCachedSales,
+  getCachedSales,
+  setCachedAudit,
+  setCachedSettings,
 } from '../utils/offlineStore'
 
 export async function getQueuedSales() {
@@ -13,11 +18,26 @@ export async function getQueuedSales() {
 }
 
 export async function listSales() {
-  return apiRequest('/sales')
+  const rows = await apiRequest('/sales')
+  try {
+    await setCachedSales(rows)
+  } catch {
+    /* ignore cache errors */
+  }
+  return rows
 }
 
 export async function getSale(id) {
-  return apiRequest(`/sales/${id}`)
+  try {
+    return await apiRequest(`/sales/${id}`)
+  } catch (err) {
+    const queued = (await getQueuedFromStore()).find((s) => s.id === id)
+    if (queued) return queued
+    const cached = await getCachedSales()
+    const found = cached?.sales?.find((s) => s.id === id)
+    if (found) return found
+    throw err
+  }
 }
 
 export async function listSalesNeedingReview() {
@@ -81,6 +101,7 @@ export async function completeSale({ items, payment, offline = false }) {
       }),
     }
     await enqueueSale(queuedSale)
+    await upsertCachedSale(queuedSale)
     await applyOptimisticStock(
       queuedSale.items.map((item) => ({
         productId: item.productId,
@@ -229,11 +250,25 @@ export async function listAuditLog(query = '') {
   const params = new URLSearchParams()
   if (query) params.set('query', query)
   const qs = params.toString()
-  return apiRequest(`/audit${qs ? `?${qs}` : ''}`)
+  const rows = await apiRequest(`/audit${qs ? `?${qs}` : ''}`)
+  if (!query) {
+    try {
+      await setCachedAudit(rows)
+    } catch {
+      /* ignore */
+    }
+  }
+  return rows
 }
 
 export async function getSettings() {
-  return apiRequest('/settings')
+  const settings = await apiRequest('/settings')
+  try {
+    await setCachedSettings(settings)
+  } catch {
+    /* ignore */
+  }
+  return settings
 }
 
 export async function updateSettings(patch) {

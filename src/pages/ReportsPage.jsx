@@ -5,6 +5,12 @@ import { listUsers } from '../api/auth'
 import { listProducts } from '../api/inventory'
 import { formatGhs } from '../utils/money'
 import { exportReportCsv, exportReportExcel } from '../utils/reportExport'
+import {
+  getCachedCatalogue,
+  getCachedReport,
+  getCachedUsers,
+  setCachedReport,
+} from '../utils/offlineStore'
 
 export default function ReportsPage() {
   const [from, setFrom] = useState('')
@@ -14,6 +20,7 @@ export default function ReportsPage() {
   const [products, setProducts] = useState([])
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(true)
+  const [fromCache, setFromCache] = useState(false)
   const [exporting, setExporting] = useState('')
 
   useEffect(() => {
@@ -30,9 +37,25 @@ export default function ReportsPage() {
         setReport(reportData)
         setUsers(userRows)
         setProducts(productRows)
+        setFromCache(false)
         setError('')
+        await setCachedReport(reportData)
       } catch (err) {
-        if (active) setError(err.message)
+        if (!active) return
+        const [cachedReport, cachedUsers, cachedProducts] = await Promise.all([
+          getCachedReport(),
+          getCachedUsers(),
+          getCachedCatalogue(),
+        ])
+        if (cachedReport?.report || cachedProducts?.products?.length) {
+          setReport(cachedReport?.report || null)
+          setUsers(cachedUsers?.users || [])
+          setProducts(cachedProducts?.products || [])
+          setFromCache(true)
+          setError('')
+        } else if (active) {
+          setError(err.message)
+        }
       } finally {
         if (active) setLoading(false)
       }
@@ -121,6 +144,11 @@ export default function ReportsPage() {
         </label>
       </div>
 
+      {fromCache ? (
+        <p className="rounded-xl bg-amber-50 px-4 py-3 text-sm text-amber-800">
+          Showing the last saved report on this device.
+        </p>
+      ) : null}
       {loading ? <p className="text-sm text-[var(--text-muted)]">Loading report...</p> : null}
       {error ? <p className="text-sm text-red-500">{error}</p> : null}
 

@@ -1,6 +1,7 @@
 import { getDeviceId } from '../utils/device'
 
 const SESSION_KEY = 'sheco_session'
+const DEFAULT_TIMEOUT_MS = 5000
 
 export function getApiBase() {
   // Prefer same-origin /api in production (nginx proxies to the API).
@@ -54,8 +55,27 @@ function networkErrorMessage() {
   return "Can't reach the Sheco server. Check your connection and try again."
 }
 
-export async function apiRequest(path, { method = 'GET', body, auth = true, headers = {} } = {}) {
+export function canUseOnlineApi() {
   const session = getStoredSession()
+  if (!session?.accessToken || session?.offlineUnlock) return false
+  if (typeof navigator !== 'undefined' && !navigator.onLine) return false
+  return true
+}
+
+export async function apiRequest(
+  path,
+  { method = 'GET', body, auth = true, headers = {}, timeoutMs = DEFAULT_TIMEOUT_MS } = {},
+) {
+  const session = getStoredSession()
+
+  // Offline-unlock sessions have no JWT — fail instantly so pages can use local cache.
+  if (auth && (!session?.accessToken || session?.offlineUnlock)) {
+    throw new ApiError(networkErrorMessage(), 0, null)
+  }
+  if (typeof navigator !== 'undefined' && !navigator.onLine) {
+    throw new ApiError(networkErrorMessage(), 0, null)
+  }
+
   const requestHeaders = {
     Accept: 'application/json',
     'X-Device-Id': session?.deviceId || getDeviceId(),
@@ -70,15 +90,21 @@ export async function apiRequest(path, { method = 'GET', body, auth = true, head
     requestHeaders.Authorization = `Bearer ${session.accessToken}`
   }
 
+  const controller = new AbortController()
+  const timer = setTimeout(() => controller.abort(), timeoutMs)
+
   let response
   try {
     response = await fetch(`${getApiBase()}${path}`, {
       method,
       headers: requestHeaders,
       body: body !== undefined ? JSON.stringify(body) : undefined,
+      signal: controller.signal,
     })
   } catch {
     throw new ApiError(networkErrorMessage(), 0, null)
+  } finally {
+    clearTimeout(timer)
   }
 
   const text = await response.text()
@@ -92,7 +118,8 @@ export async function apiRequest(path, { method = 'GET', body, auth = true, head
   }
 
   if (!response.ok) {
-    if (response.status === 401 && auth) {
+    // Never wipe an offline-unlock session because of an online API 401.
+    if (response.status === 401 && auth && !session?.offlineUnlock) {
       clearStoredSession()
     }
     throw new ApiError(extractDetail(payload), response.status, payload)

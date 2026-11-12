@@ -27,9 +27,16 @@ export default function PosPage() {
       const rows = await listProducts()
       setProducts(rows)
       await cacheCatalogue(rows)
+      setError('')
     } catch {
       const cached = await getCachedCatalogue()
-      if (cached?.products) setProducts(cached.products)
+      if (cached?.products?.length) {
+        setProducts(cached.products)
+        setError('')
+      } else {
+        setProducts([])
+        setError('No saved catalogue on this device. Sign in online once and open POS to cache products.')
+      }
     }
   }, [cacheCatalogue, getCachedCatalogue])
 

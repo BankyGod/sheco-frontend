@@ -1,8 +1,15 @@
 import { apiRequest } from './client'
+import { setCachedCatalogue, setCachedAlerts } from '../utils/offlineStore'
 
 export async function listProducts({ includeInactive = false } = {}) {
   const query = includeInactive ? '?includeInactive=true' : ''
-  return apiRequest(`/products${query}`)
+  const rows = await apiRequest(`/products${query}`)
+  try {
+    await setCachedCatalogue(rows)
+  } catch {
+    /* ignore */
+  }
+  return rows
 }
 
 export async function getProduct(id, options = {}) {
@@ -54,5 +61,11 @@ export async function adjustStock(payload) {
 }
 
 export async function getStockAlerts() {
-  return apiRequest('/inventory/alerts')
+  const alerts = await apiRequest('/inventory/alerts')
+  try {
+    await setCachedAlerts(alerts)
+  } catch {
+    /* ignore */
+  }
+  return alerts
 }

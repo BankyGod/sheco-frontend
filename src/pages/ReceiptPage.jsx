@@ -16,9 +16,20 @@ export default function ReceiptPage() {
     let active = true
     async function load() {
       try {
-        const productRows = await listProducts({ includeInactive: true }).catch(() => [])
+        let productRows = []
+        try {
+          productRows = await listProducts({ includeInactive: true })
+        } catch {
+          const { getCachedCatalogue } = await import('../utils/offlineStore')
+          productRows = (await getCachedCatalogue())?.products || []
+        }
         if (!active) return
         setProducts(productRows)
+
+        if (location.state?.sale) {
+          setSale(location.state.sale)
+          return
+        }
 
         const queuedRows = await getQueuedSales()
         const queued = queuedRows.find((s) => s.id === id)

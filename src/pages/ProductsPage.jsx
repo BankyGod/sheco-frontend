@@ -45,17 +45,19 @@ export default function ProductsPage() {
 
   const refresh = useCallback(async () => {
     setLoading(true)
+    setError('')
     try {
       const rows = await listProducts({ includeInactive: isAdmin })
       setProducts(rows)
       await cacheCatalogue(rows)
     } catch (err) {
       const cached = await getCachedCatalogue()
-      if (cached?.products) {
+      if (cached?.products?.length) {
         setProducts(cached.products)
-        setError('Showing cached catalogue (API unavailable)')
+        setError('Showing saved products on this device (offline).')
       } else {
-        setError(err.message)
+        setProducts([])
+        setError(err.message || 'No saved products on this device yet. Open Products once while online.')
       }
     } finally {
       setLoading(false)
