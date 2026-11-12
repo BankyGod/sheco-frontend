@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import {
   Area,
   AreaChart,
@@ -14,6 +14,7 @@ import {
 } from 'recharts'
 import {
   CalendarDays,
+  ChevronDown,
   CircleDollarSign,
   PackageMinus,
   Receipt,
@@ -29,10 +30,22 @@ import { formatGhs } from '../utils/money'
 import { listUsers } from '../api/auth'
 import { getCachedDashboard, setCachedDashboard } from '../utils/offlineStore'
 
+const PERIODS = [
+  { id: 'today', label: 'Today' },
+  { id: 'this-week', label: 'This week' },
+  { id: 'last-week', label: 'Last week' },
+  { id: 'this-month', label: 'This month' },
+  { id: 'last-month', label: 'Last month' },
+  { id: 'this-year', label: 'This year' },
+  { id: 'all-time', label: 'All time' },
+]
+
 export default function DashboardPage() {
   const { user } = useAuth()
   const { online } = useOffline()
   const [period, setPeriod] = useState('this-week')
+  const [periodOpen, setPeriodOpen] = useState(false)
+  const periodRef = useRef(null)
   const [stats, setStats] = useState(null)
   const [alerts, setAlerts] = useState({ lowStock: [], expiringSoon: [], expired: [] })
   const [recentSales, setRecentSales] = useState([])
@@ -42,13 +55,23 @@ export default function DashboardPage() {
   const [cacheSavedAt, setCacheSavedAt] = useState('')
   const [loading, setLoading] = useState(true)
 
+  const periodMeta = PERIODS.find((p) => p.id === period) || PERIODS[1]
+
+  useEffect(() => {
+    function onDocClick(event) {
+      if (!periodRef.current?.contains(event.target)) setPeriodOpen(false)
+    }
+    document.addEventListener('mousedown', onDocClick)
+    return () => document.removeEventListener('mousedown', onDocClick)
+  }, [])
+
   useEffect(() => {
     let active = true
     async function load() {
       setLoading(true)
       try {
         const [dashboard, stockAlerts, sales, userRows] = await Promise.all([
-          getDashboardStats(),
+          getDashboardStats(period),
           getStockAlerts(),
           listSales(),
           listUsers(),
@@ -62,6 +85,7 @@ export default function DashboardPage() {
         setCacheSavedAt('')
         setError('')
         await setCachedDashboard({
+          period,
           stats: dashboard,
           alerts: stockAlerts,
           recentSales: sales.slice(0, 6),
@@ -89,9 +113,9 @@ export default function DashboardPage() {
     return () => {
       active = false
     }
-  }, [online])
+  }, [online, period])
 
-  if (loading) {
+  if (loading && !stats) {
     return <p className="text-sm text-[var(--text-muted)]">Loading dashboard...</p>
   }
 
@@ -107,6 +131,11 @@ export default function DashboardPage() {
     : 0
   const lowStockShare = Math.min(100, (alerts.lowStock?.length || 0) * 18)
   const expiryShare = Math.min(100, (alerts.expiringSoon?.length || 0) * 20)
+  const series = stats.series || stats.weekly || []
+  const trend = stats.trend || stats.monthly || []
+  const volumeLabel = stats.volumeLabel || 'Sales volume'
+  const salesLabel = `${periodMeta.label} sales`
+  const revenueLabel = `${periodMeta.label} revenue`
 
   return (
     <div className="space-y-6">
@@ -117,17 +146,44 @@ export default function DashboardPage() {
             Hi, {user?.name?.split(' ')[0]}. Welcome back to Sheco!
           </p>
         </div>
-        <button
-          type="button"
-          className="inline-flex items-center gap-2 rounded-xl bg-white px-4 py-2.5 text-sm font-medium shadow-[var(--shadow)]"
-          onClick={() => setPeriod(period === 'this-week' ? 'this-month' : 'this-week')}
-        >
-          <CalendarDays size={16} className="text-hospital" />
-          Filter Period
-          <span className="text-[var(--text-muted)]">
-            {period === 'this-week' ? 'This week' : 'This month'}
-          </span>
-        </button>
+        <div className="relative" ref={periodRef}>
+          <button
+            type="button"
+            className="inline-flex items-center gap-2 rounded-xl bg-white px-4 py-2.5 text-sm font-medium shadow-[var(--shadow)]"
+            onClick={() => setPeriodOpen((open) => !open)}
+            aria-haspopup="listbox"
+            aria-expanded={periodOpen}
+          >
+            <CalendarDays size={16} className="text-hospital" />
+            Filter Period
+            <span className="text-[var(--text-muted)]">{periodMeta.label}</span>
+            <ChevronDown size={14} className="text-[var(--text-muted)]" />
+          </button>
+          {periodOpen ? (
+            <div
+              role="listbox"
+              className="absolute right-0 z-20 mt-2 w-48 overflow-hidden rounded-xl border border-[var(--border)] bg-white py-1 shadow-[var(--shadow)]"
+            >
+              {PERIODS.map((option) => (
+                <button
+                  key={option.id}
+                  type="button"
+                  role="option"
+                  aria-selected={option.id === period}
+                  className={`flex w-full px-4 py-2.5 text-left text-sm transition hover:bg-hospital-light ${
+                    option.id === period ? 'font-semibold text-hospital-dark' : 'text-[var(--text)]'
+                  }`}
+                  onClick={() => {
+                    setPeriod(option.id)
+                    setPeriodOpen(false)
+                  }}
+                >
+                  {option.label}
+                </button>
+              ))}
+            </div>
+          ) : null}
+        </div>
       </div>
 
       {!online || fromCache ? (
@@ -141,13 +197,13 @@ export default function DashboardPage() {
 
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <StatCard
-          label="Today's Sales"
+          label={salesLabel}
           value={stats.todayCount}
-          trend="Completed sales today"
+          trend={`Completed sales · ${periodMeta.label}`}
           icon={ShoppingBag}
         />
         <StatCard
-          label="Today's Revenue"
+          label={revenueLabel}
           value={formatGhs(stats.todayRevenue)}
           trend={`Cash ${formatGhs(stats.cashRevenue)} · MoMo ${formatGhs(stats.momoRevenue)}`}
           icon={CircleDollarSign}
@@ -187,7 +243,7 @@ export default function DashboardPage() {
           </div>
           <div className="mt-4 h-56">
             <ResponsiveContainer width="100%" height="100%">
-              <AreaChart data={stats.weekly || []}>
+              <AreaChart data={series}>
                 <defs>
                   <linearGradient id="salesFill" x1="0" y1="0" x2="0" y2="1">
                     <stop offset="5%" stopColor="#4A9BCF" stopOpacity={0.35} />
@@ -195,7 +251,7 @@ export default function DashboardPage() {
                   </linearGradient>
                 </defs>
                 <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#eef0f4" />
-                <XAxis dataKey="day" tickLine={false} axisLine={false} tick={{ fontSize: 12 }} />
+                <XAxis dataKey="label" tickLine={false} axisLine={false} tick={{ fontSize: 12 }} />
                 <YAxis tickLine={false} axisLine={false} tick={{ fontSize: 12 }} />
                 <Tooltip />
                 <Area
@@ -218,9 +274,9 @@ export default function DashboardPage() {
           <h3 className="text-lg font-semibold">Total Revenue</h3>
           <div className="mt-4 h-64">
             <ResponsiveContainer width="100%" height="100%">
-              <LineChart data={stats.monthly || []}>
+              <LineChart data={trend}>
                 <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#eef0f4" />
-                <XAxis dataKey="month" tickLine={false} axisLine={false} tick={{ fontSize: 12 }} />
+                <XAxis dataKey="label" tickLine={false} axisLine={false} tick={{ fontSize: 12 }} />
                 <YAxis tickLine={false} axisLine={false} tick={{ fontSize: 12 }} />
                 <Tooltip formatter={(v) => `GHS ${Number(v).toLocaleString()}`} />
                 <Line
@@ -248,12 +304,12 @@ export default function DashboardPage() {
 
         <div className="rounded-2xl bg-white p-5 shadow-[var(--shadow)]">
           <h3 className="text-lg font-semibold">Customer Map</h3>
-          <p className="text-xs text-[var(--text-muted)]">Daily sales volume</p>
+          <p className="text-xs text-[var(--text-muted)]">{volumeLabel}</p>
           <div className="mt-4 h-56">
             <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={stats.weekly || []}>
+              <BarChart data={series}>
                 <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#eef0f4" />
-                <XAxis dataKey="day" tickLine={false} axisLine={false} tick={{ fontSize: 12 }} />
+                <XAxis dataKey="label" tickLine={false} axisLine={false} tick={{ fontSize: 12 }} />
                 <YAxis tickLine={false} axisLine={false} tick={{ fontSize: 12 }} />
                 <Tooltip />
                 <Bar

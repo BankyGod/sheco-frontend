@@ -210,8 +210,11 @@ export async function syncQueuedSales() {
   }
 }
 
-export async function getDashboardStats() {
-  return apiRequest('/dashboard/stats')
+export async function getDashboardStats(period = 'this-week') {
+  const params = new URLSearchParams()
+  if (period) params.set('period', period)
+  const query = params.toString()
+  return apiRequest(`/dashboard/stats${query ? `?${query}` : ''}`)
 }
 
 export async function getReportData({ from, to } = {}) {
