@@ -126,14 +126,17 @@ export default function SalesPage() {
                       </span>
                     </td>
                     <td className="px-4 py-3">
-                      <div className="flex flex-wrap gap-2">
-                        <Link to={`/sales/${sale.id}`} className="text-xs font-semibold text-hospital-dark">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <Link
+                          to={`/sales/${sale.id}`}
+                          className="inline-flex items-center rounded-lg border border-hospital-soft bg-hospital-light px-3 py-1.5 text-xs font-semibold text-hospital-dark transition hover:bg-hospital hover:text-white"
+                        >
                           Receipt
                         </Link>
                         {isAdmin && sale.status === 'completed' && sale.syncFlag !== 'queued' ? (
                           <button
                             type="button"
-                            className="text-xs font-semibold text-red-500"
+                            className="inline-flex items-center rounded-lg border border-red-200 bg-red-50 px-3 py-1.5 text-xs font-semibold text-red-600 transition hover:bg-red-500 hover:text-white"
                             onClick={() => setVoidingId(sale.id)}
                           >
                             Void

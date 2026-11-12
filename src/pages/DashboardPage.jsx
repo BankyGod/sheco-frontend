@@ -185,53 +185,85 @@ export default function DashboardPage() {
               Save Report
             </button>
           </div>
-          <div className="mt-4 h-64">
+          <div className="mt-4 h-56">
             <ResponsiveContainer width="100%" height="100%">
-              <AreaChart data={stats.weekRevenue || []}>
+              <AreaChart data={stats.weekly || []}>
                 <defs>
-                  <linearGradient id="rev" x1="0" y1="0" x2="0" y2="1">
+                  <linearGradient id="salesFill" x1="0" y1="0" x2="0" y2="1">
                     <stop offset="5%" stopColor="#4A9BCF" stopOpacity={0.35} />
                     <stop offset="95%" stopColor="#4A9BCF" stopOpacity={0} />
                   </linearGradient>
                 </defs>
-                <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
-                <XAxis dataKey="day" tick={{ fontSize: 12 }} />
-                <YAxis tick={{ fontSize: 12 }} />
-                <Tooltip formatter={(v) => formatGhs(v)} />
-                <Area type="monotone" dataKey="revenue" stroke="#2E7BA8" fill="url(#rev)" />
+                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#eef0f4" />
+                <XAxis dataKey="day" tickLine={false} axisLine={false} tick={{ fontSize: 12 }} />
+                <YAxis tickLine={false} axisLine={false} tick={{ fontSize: 12 }} />
+                <Tooltip />
+                <Area
+                  type="monotone"
+                  dataKey="sales"
+                  stroke="#4A9BCF"
+                  fill="url(#salesFill)"
+                  strokeWidth={3}
+                  animationDuration={1200}
+                  animationEasing="ease-out"
+                />
               </AreaChart>
             </ResponsiveContainer>
           </div>
         </div>
       </div>
 
-      <div className="grid gap-4 xl:grid-cols-2">
+      <div className="grid gap-4 xl:grid-cols-[1.5fr_1fr]">
         <div className="rounded-2xl bg-white p-5 shadow-[var(--shadow)]">
           <h3 className="text-lg font-semibold">Total Revenue</h3>
-          <div className="mt-4 h-56">
+          <div className="mt-4 h-64">
             <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={stats.weekRevenue || []}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
-                <XAxis dataKey="day" tick={{ fontSize: 12 }} />
-                <YAxis tick={{ fontSize: 12 }} />
-                <Tooltip formatter={(v) => formatGhs(v)} />
-                <Bar dataKey="revenue" fill="#4A9BCF" radius={[8, 8, 0, 0]} />
-              </BarChart>
+              <LineChart data={stats.monthly || []}>
+                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#eef0f4" />
+                <XAxis dataKey="month" tickLine={false} axisLine={false} tick={{ fontSize: 12 }} />
+                <YAxis tickLine={false} axisLine={false} tick={{ fontSize: 12 }} />
+                <Tooltip formatter={(v) => `GHS ${Number(v).toLocaleString()}`} />
+                <Line
+                  type="monotone"
+                  dataKey="revenue"
+                  stroke="#4A9BCF"
+                  strokeWidth={3}
+                  dot={false}
+                  animationDuration={1400}
+                  animationEasing="ease-out"
+                />
+                <Line
+                  type="monotone"
+                  dataKey="profit"
+                  stroke="#ef4444"
+                  strokeWidth={3}
+                  dot={false}
+                  animationDuration={1400}
+                  animationEasing="ease-out"
+                />
+              </LineChart>
             </ResponsiveContainer>
           </div>
         </div>
 
         <div className="rounded-2xl bg-white p-5 shadow-[var(--shadow)]">
           <h3 className="text-lg font-semibold">Customer Map</h3>
+          <p className="text-xs text-[var(--text-muted)]">Daily sales volume</p>
           <div className="mt-4 h-56">
             <ResponsiveContainer width="100%" height="100%">
-              <LineChart data={stats.weekRevenue || []}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
-                <XAxis dataKey="day" tick={{ fontSize: 12 }} />
-                <YAxis tick={{ fontSize: 12 }} />
+              <BarChart data={stats.weekly || []}>
+                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#eef0f4" />
+                <XAxis dataKey="day" tickLine={false} axisLine={false} tick={{ fontSize: 12 }} />
+                <YAxis tickLine={false} axisLine={false} tick={{ fontSize: 12 }} />
                 <Tooltip />
-                <Line type="monotone" dataKey="sales" stroke="#22c55e" strokeWidth={2} dot={false} />
-              </LineChart>
+                <Bar
+                  dataKey="sales"
+                  fill="#4A9BCF"
+                  radius={[8, 8, 0, 0]}
+                  animationDuration={1100}
+                  animationEasing="ease-out"
+                />
+              </BarChart>
             </ResponsiveContainer>
           </div>
         </div>
@@ -279,19 +311,40 @@ export default function DashboardPage() {
 
 function Ring({ label, value, color }) {
   const clamped = Math.max(0, Math.min(100, Number(value) || 0))
+  const radius = 36
+  const circumference = 2 * Math.PI * radius
+  const [offset, setOffset] = useState(circumference)
+
+  useEffect(() => {
+    const frame = requestAnimationFrame(() => {
+      setOffset(circumference - (clamped / 100) * circumference)
+    })
+    return () => cancelAnimationFrame(frame)
+  }, [clamped, circumference])
+
   return (
     <div className="flex flex-col items-center gap-2">
-      <div
-        className="flex h-24 w-24 items-center justify-center rounded-full"
-        style={{
-          background: `conic-gradient(${color} ${clamped}%, #e5e7eb 0)`,
-        }}
-      >
-        <div className="flex h-16 w-16 items-center justify-center rounded-full bg-white text-sm font-semibold">
+      <div className="relative h-[100px] w-[100px]">
+        <svg width="100" height="100" className="-rotate-90" aria-hidden>
+          <circle cx="50" cy="50" r={radius} stroke="#eef0f4" strokeWidth="10" fill="none" />
+          <circle
+            cx="50"
+            cy="50"
+            r={radius}
+            stroke={color}
+            strokeWidth="10"
+            fill="none"
+            strokeDasharray={circumference}
+            strokeDashoffset={offset}
+            strokeLinecap="round"
+            style={{ transition: 'stroke-dashoffset 1.1s ease-out' }}
+          />
+        </svg>
+        <div className="absolute inset-0 flex items-center justify-center text-sm font-bold">
           {clamped}%
         </div>
       </div>
-      <p className="text-xs font-medium text-[var(--text-muted)]">{label}</p>
+      <p className="text-xs text-[var(--text-muted)]">{label}</p>
     </div>
   )
 }
