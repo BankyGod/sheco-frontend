@@ -30,8 +30,10 @@ export default defineConfig({
           },
         ],
       },
+      injectRegister: 'auto',
+      includeAssets: ['favicon.svg', 'login-pharmacy-bg.jpg'],
       injectManifest: {
-        globPatterns: ['**/*.{js,css,html,ico,svg,woff2}'],
+        globPatterns: ['**/*.{js,css,html,ico,svg,woff2,jpg,png,webp}'],
       },
     }),
   ],

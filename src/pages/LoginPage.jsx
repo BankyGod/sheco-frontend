@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Navigate, useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import { ROLES } from '../api/auth'
@@ -12,7 +12,11 @@ export default function LoginPage() {
   const [password, setPassword] = useState('')
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
-  const [mode, setMode] = useState('online')
+  const [mode, setMode] = useState(() => (typeof navigator !== 'undefined' && !navigator.onLine ? 'offline' : 'online'))
+
+  useEffect(() => {
+    if (!online) setMode('offline')
+  }, [online])
 
   if (isAuthenticated) {
     return <Navigate to={user.role === ROLES.SUPER_ADMIN ? '/dashboard' : '/pos'} replace />
@@ -24,10 +28,22 @@ export default function LoginPage() {
     setLoading(true)
     try {
       const goingOffline = mode === 'offline' || !online
-      const session = goingOffline
-        ? await unlockOffline(username, password)
-        : await login(username, password)
-      if (!goingOffline && queueCount > 0) {
+      let session
+      if (goingOffline) {
+        session = await unlockOffline(username, password)
+      } else {
+        try {
+          session = await login(username, password)
+        } catch (err) {
+          // Network down mid-login: fall back to offline unlock if available.
+          if (err?.status === 0 || /offline|reach the Sheco server/i.test(err?.message || '')) {
+            session = await unlockOffline(username, password)
+          } else {
+            throw err
+          }
+        }
+      }
+      if (!goingOffline && !session.offlineUnlock && queueCount > 0) {
         await syncNow()
       }
       navigate(session.user.role === ROLES.SUPER_ADMIN ? '/dashboard' : '/pos')
@@ -72,10 +88,15 @@ export default function LoginPage() {
         </div>
 
         {!online ? (
-          <p className="mb-4 rounded-xl bg-amber-50 px-3 py-2 text-sm text-amber-700">
-            You are offline. Use offline unlock with your password if this device was signed in before.
+          <p className="mb-4 rounded-xl bg-red-50 px-3 py-2 text-sm text-red-700">
+            You are offline. Use Offline unlock with the same password from your last online sign-in
+            on this device.
           </p>
-        ) : null}
+        ) : (
+          <p className="mb-4 text-xs text-[var(--text-muted)]">
+            Tip: sign in online once on this device so Offline unlock works during outages.
+          </p>
+        )}
 
         <form onSubmit={handleSubmit} className="space-y-4">
           <label className="block text-sm">

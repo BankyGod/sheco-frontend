@@ -1,6 +1,6 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react'
 import { getQueuedSales, syncQueuedSales } from '../api/sales'
-import { getStoredSession } from '../api/client'
+import { getApiBase, getStoredSession } from '../api/client'
 import {
   exportQueueJson,
   getCachedCatalogue as readCatalogue,
@@ -23,6 +23,24 @@ function catalogueAgeLabel(savedAt) {
   if (hours < 24) return `${hours} hour${hours === 1 ? '' : 's'} ago`
   const days = Math.floor(hours / 24)
   return `${days} day${days === 1 ? '' : 's'} ago`
+}
+
+async function probeServerReachable() {
+  if (typeof navigator !== 'undefined' && !navigator.onLine) return false
+  const controller = new AbortController()
+  const timer = setTimeout(() => controller.abort(), 3000)
+  try {
+    const response = await fetch(`${getApiBase().replace(/\/api$/, '')}/health`, {
+      method: 'GET',
+      cache: 'no-store',
+      signal: controller.signal,
+    })
+    return response.ok
+  } catch {
+    return false
+  } finally {
+    clearTimeout(timer)
+  }
 }
 
 export function OfflineProvider({ children }) {
@@ -60,11 +78,22 @@ export function OfflineProvider({ children }) {
     return cached
   }, [])
 
+  const refreshOnlineStatus = useCallback(async () => {
+    if (typeof navigator !== 'undefined' && !navigator.onLine) {
+      setOnline(false)
+      return false
+    }
+    const reachable = await probeServerReachable()
+    setOnline(reachable)
+    return reachable
+  }, [])
+
   const syncNow = useCallback(async () => {
     if (syncing) return { synced: 0, blocked: 'busy' }
     setSyncing(true)
     try {
-      if (!navigator.onLine) {
+      const reachable = await refreshOnlineStatus()
+      if (!reachable) {
         setLastSyncMessage('Still offline')
         return { synced: 0, blocked: 'offline', message: 'Still offline' }
       }
@@ -93,7 +122,7 @@ export function OfflineProvider({ children }) {
     } finally {
       setSyncing(false)
     }
-  }, [refreshCatalogueMeta, refreshQueue, syncing])
+  }, [refreshCatalogueMeta, refreshOnlineStatus, refreshQueue, syncing])
 
   const exportQueue = useCallback(async () => {
     const rows = await refreshQueue()
@@ -113,26 +142,31 @@ export function OfflineProvider({ children }) {
       if (!active) return
       await refreshQueue()
       await refreshCatalogueMeta()
+      await refreshOnlineStatus()
       await requestBackgroundSync()
     })()
     return () => {
       active = false
     }
-  }, [refreshCatalogueMeta, refreshQueue])
+  }, [refreshCatalogueMeta, refreshOnlineStatus, refreshQueue])
 
   useEffect(() => {
-    const onOnline = () => {
-      setOnline(true)
-      syncNow()
+    const onOnline = async () => {
+      const reachable = await refreshOnlineStatus()
+      if (reachable) syncNow()
     }
     const onOffline = () => setOnline(false)
     window.addEventListener('online', onOnline)
     window.addEventListener('offline', onOffline)
+    const timer = setInterval(() => {
+      refreshOnlineStatus()
+    }, 15000)
     return () => {
       window.removeEventListener('online', onOnline)
       window.removeEventListener('offline', onOffline)
+      clearInterval(timer)
     }
-  }, [syncNow])
+  }, [refreshOnlineStatus, syncNow])
 
   useEffect(() => {
     if (!('serviceWorker' in navigator)) return undefined
@@ -155,6 +189,7 @@ export function OfflineProvider({ children }) {
       catalogueMeta,
       catalogueAgeLabel: catalogueAgeLabel(catalogueMeta?.savedAt),
       refreshQueue,
+      refreshOnlineStatus,
       syncNow,
       exportQueue,
       cacheCatalogue,
@@ -168,6 +203,7 @@ export function OfflineProvider({ children }) {
       syncing,
       catalogueMeta,
       refreshQueue,
+      refreshOnlineStatus,
       syncNow,
       exportQueue,
       cacheCatalogue,

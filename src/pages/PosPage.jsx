@@ -130,7 +130,7 @@ export default function PosPage() {
 
     setBusy(true)
     try {
-      const sale = await completeSale({
+      const payload = {
         items: cart.map((line) => ({
           productId: line.productId,
           quantity: line.quantity,
@@ -145,8 +145,19 @@ export default function PosPage() {
           reference: paymentMethod === 'momo' ? reference.trim() : null,
         },
         offline: !online,
-      })
-      refreshQueue()
+      }
+      let sale
+      try {
+        sale = await completeSale(payload)
+      } catch (err) {
+        // If the server is unreachable, queue the sale locally.
+        if (err?.status === 0 || /offline|reach the Sheco server/i.test(err?.message || '')) {
+          sale = await completeSale({ ...payload, offline: true })
+        } else {
+          throw err
+        }
+      }
+      await refreshQueue()
       setCart([])
       setAmountTendered('')
       setReference('')

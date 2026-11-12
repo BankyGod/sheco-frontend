@@ -19,6 +19,8 @@ export function AuthProvider({ children }) {
     async function refreshMe() {
       const current = getSession()
       if (!current?.accessToken || current?.offlineUnlock) return
+      // Keep the local session when offline — do not kick the user out.
+      if (typeof navigator !== 'undefined' && !navigator.onLine) return
       try {
         const me = await getMe()
         if (!active) return
@@ -31,10 +33,13 @@ export function AuthProvider({ children }) {
         }
         saveSession(next)
         setSession(next)
-      } catch {
+      } catch (err) {
         if (!active) return
-        clearSession()
-        setSession(null)
+        // Only clear session on auth failure, not network errors.
+        if (err?.status === 401) {
+          clearSession()
+          setSession(null)
+        }
       }
     }
     refreshMe()
