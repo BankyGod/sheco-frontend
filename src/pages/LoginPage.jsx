@@ -1,5 +1,5 @@
-import { useEffect, useState } from 'react'
-import { Navigate, useNavigate } from 'react-router-dom'
+import { useEffect, useMemo, useState } from 'react'
+import { Navigate, useNavigate, useSearchParams } from 'react-router-dom'
 import { getOfflineUnlockMeta, ROLES, saveOfflinePin } from '../api/auth'
 import { useAuth } from '../context/AuthContext'
 import { useOffline } from '../context/OfflineContext'
@@ -9,33 +9,65 @@ export default function LoginPage() {
   const { login, unlockOffline, isAuthenticated, user } = useAuth()
   const { online, syncNow, queueCount } = useOffline()
   const navigate = useNavigate()
-  const [username, setUsername] = useState('')
+  const [searchParams, setSearchParams] = useSearchParams()
+  const unlockMeta = getOfflineUnlockMeta()
+
+  const resumeOnline = searchParams.get('resume') === 'online'
+  const resumeQueued = Number(searchParams.get('queued') || 0)
+  const resumeUser = searchParams.get('user') || ''
+
+  // Connectivity decides the login form — no manual tab switching.
+  const mode = online ? 'online' : 'offline'
+
+  const [username, setUsername] = useState(() => resumeUser || unlockMeta?.username || '')
   const [password, setPassword] = useState('')
   const [pin, setPin] = useState('')
   const [confirmPin, setConfirmPin] = useState('')
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
   const [step, setStep] = useState('login')
-  const [mode, setMode] = useState(() =>
-    typeof navigator !== 'undefined' && !navigator.onLine ? 'offline' : 'online',
-  )
-  const unlockMeta = getOfflineUnlockMeta()
 
-  useEffect(() => {
-    if (!online) setMode('offline')
-  }, [online])
-
-  useEffect(() => {
-    if (mode === 'offline' && unlockMeta?.username && !username) {
-      setUsername(unlockMeta.username)
+  const banner = useMemo(() => {
+    if (step === 'setup-pin') return null
+    if (resumeOnline && online) {
+      return {
+        tone: 'green',
+        text:
+          resumeQueued > 0
+            ? `Internet is back. Sign in online to sync ${resumeQueued} queued sale${resumeQueued === 1 ? '' : 's'}.`
+            : 'Internet is back. Sign in online to continue with full sync.',
+      }
     }
-  }, [mode, unlockMeta, username])
+    if (!online) {
+      return {
+        tone: 'red',
+        text: 'No internet. Unlock offline with your username and 4-digit PIN. Sales will save on this device and sync later.',
+      }
+    }
+    return {
+      tone: 'muted',
+      text: 'Online sign-in. After this, you can create a 4-digit PIN for offline unlock on this device.',
+    }
+  }, [online, resumeOnline, resumeQueued, step])
+
+  useEffect(() => {
+    if (!online) {
+      setPassword('')
+      setError('')
+      if (unlockMeta?.username) setUsername((current) => current || unlockMeta.username)
+    }
+  }, [online, unlockMeta])
+
+  useEffect(() => {
+    if (resumeUser) setUsername(resumeUser)
+  }, [resumeUser])
 
   if (isAuthenticated && step !== 'setup-pin') {
     return <Navigate to={user.role === ROLES.SUPER_ADMIN ? '/dashboard' : '/pos'} replace />
   }
 
   function goAfterAuth(session) {
+    setSearchParams({})
     navigate(session.user.role === ROLES.SUPER_ADMIN ? '/dashboard' : '/pos')
   }
 
@@ -44,33 +76,34 @@ export default function LoginPage() {
     setError('')
     setLoading(true)
     try {
-      const goingOffline = mode === 'offline' || !online
-      let session
-      if (goingOffline) {
-        session = await unlockOffline(username, pin)
-      } else {
-        try {
-          session = await login(username, password)
-        } catch (err) {
-          if (err?.status === 0 || /offline|reach the Sheco server/i.test(err?.message || '')) {
-            session = await unlockOffline(username, pin || password)
-          } else {
-            throw err
-          }
-        }
+      if (!online) {
+        const session = await unlockOffline(username, pin)
+        goAfterAuth(session)
+        return
+      }
 
-        const meta = getOfflineUnlockMeta()
-        if (!meta?.hasPin) {
+      let session
+      try {
+        session = await login(username, password)
+      } catch (err) {
+        if (err?.status === 0 || /offline|reach the Sheco server/i.test(err?.message || '')) {
+          setError('Connection dropped. Use offline unlock with your 4-digit PIN.')
           setPin('')
-          setConfirmPin('')
-          setStep('setup-pin')
-          setLoading(false)
           return
         }
+        throw err
+      }
 
-        if (queueCount > 0) {
-          await syncNow()
-        }
+      const meta = getOfflineUnlockMeta()
+      if (!meta?.hasPin) {
+        setPin('')
+        setConfirmPin('')
+        setStep('setup-pin')
+        return
+      }
+
+      if (queueCount > 0) {
+        await syncNow()
       }
       goAfterAuth(session)
     } catch (err) {
@@ -95,10 +128,8 @@ export default function LoginPage() {
     try {
       await saveOfflinePin(pin)
       if (queueCount > 0) await syncNow()
-      const sessionUser = user || getOfflineUnlockMeta()
-      navigate(
-        (user?.role || sessionUser?.role) === ROLES.SUPER_ADMIN ? '/dashboard' : '/pos',
-      )
+      setSearchParams({})
+      navigate((user?.role || getOfflineUnlockMeta()?.role) === ROLES.SUPER_ADMIN ? '/dashboard' : '/pos')
     } catch (err) {
       setError(err.message || 'Could not save offline PIN')
     } finally {
@@ -120,13 +151,16 @@ export default function LoginPage() {
             Sheco<span className="text-hospital">.</span>
           </h1>
           <p className="mt-2 text-sm text-[var(--text-muted)]">Pharmacy Management System</p>
+          <p className="mt-3 text-xs font-semibold uppercase tracking-wide text-hospital-dark">
+            {mode === 'online' ? 'Online sign-in' : 'Offline unlock'}
+          </p>
         </div>
 
         {step === 'setup-pin' ? (
           <form onSubmit={handleSetupPin} className="space-y-5">
             <div className="rounded-xl bg-hospital-light px-3 py-3 text-sm text-hospital-dark">
-              Create a <strong>4-digit offline PIN</strong> for this device. You will use it to unlock
-              Sheco when there is no internet.
+              Create a <strong>4-digit offline PIN</strong> for this device. When there is no internet,
+              Sheco will ask for this PIN so you can keep making sales offline.
             </div>
             <div>
               <p className="mb-3 text-center text-sm font-medium">Offline PIN</p>
@@ -147,43 +181,19 @@ export default function LoginPage() {
           </form>
         ) : (
           <>
-            <div className="mb-4 flex rounded-xl bg-canvas p-1 text-sm">
-              <button
-                type="button"
-                className={`flex-1 rounded-lg px-3 py-2 font-medium ${mode === 'online' ? 'bg-white text-hospital-dark shadow-sm' : 'text-[var(--text-muted)]'}`}
-                onClick={() => {
-                  setMode('online')
-                  setError('')
-                }}
+            {banner ? (
+              <p
+                className={`mb-4 rounded-xl px-3 py-2 text-sm ${
+                  banner.tone === 'red'
+                    ? 'bg-red-50 text-red-700'
+                    : banner.tone === 'green'
+                      ? 'bg-emerald-50 text-emerald-700'
+                      : 'bg-canvas text-[var(--text-muted)]'
+                }`}
               >
-                Sign in
-              </button>
-              <button
-                type="button"
-                className={`flex-1 rounded-lg px-3 py-2 font-medium ${mode === 'offline' ? 'bg-white text-hospital-dark shadow-sm' : 'text-[var(--text-muted)]'}`}
-                onClick={() => {
-                  setMode('offline')
-                  setError('')
-                  setPin('')
-                }}
-              >
-                Offline unlock
-              </button>
-            </div>
-
-            {!online ? (
-              <p className="mb-4 rounded-xl bg-red-50 px-3 py-2 text-sm text-red-700">
-                You are offline. Unlock with your username and 4-digit PIN from this device.
+                {banner.text}
               </p>
-            ) : mode === 'offline' ? (
-              <p className="mb-4 text-xs text-[var(--text-muted)]">
-                Use the 4-digit offline PIN created after your last online sign-in on this device.
-              </p>
-            ) : (
-              <p className="mb-4 text-xs text-[var(--text-muted)]">
-                Tip: sign in online once on this device, then set a 4-digit PIN for offline unlock.
-              </p>
-            )}
+            ) : null}
 
             <form onSubmit={handleSubmit} className="space-y-4">
               <label className="block text-sm">
@@ -215,7 +225,8 @@ export default function LoginPage() {
                   <PinInput value={pin} onChange={setPin} autoFocus idPrefix="offline-pin" />
                   {!unlockMeta?.hasPin ? (
                     <p className="mt-3 text-xs text-amber-700">
-                      No offline PIN is saved on this device yet. Sign in online first to create one.
+                      No offline PIN on this device yet. Connect to the internet and sign in online
+                      first to create one.
                     </p>
                   ) : null}
                 </div>

@@ -1,6 +1,7 @@
 import { Navigate, Route, Routes } from 'react-router-dom'
 import { AuthProvider, useAuth } from './context/AuthContext'
 import { OfflineProvider } from './context/OfflineContext'
+import OnlineResumeBridge from './components/OnlineResumeBridge'
 import { ProtectedRoute } from './components/ProtectedRoute'
 import AdminLayout from './layouts/AdminLayout'
 import PosLayout from './layouts/PosLayout'
@@ -28,6 +29,7 @@ export default function App() {
   return (
     <AuthProvider>
       <OfflineProvider>
+        <OnlineResumeBridge />
         <Routes>
           <Route path="/login" element={<LoginPage />} />
           <Route path="/" element={<HomeRedirect />} />
