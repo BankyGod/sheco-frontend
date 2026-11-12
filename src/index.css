@@ -52,12 +52,14 @@ textarea {
     font-size: 1.55rem;
     letter-spacing: -0.02em;
   }
+}
 
-  table {
-    display: block;
-    overflow-x: auto;
-    -webkit-overflow-scrolling: touch;
-  }
+/* Only opt-in tables scroll horizontally — never override Tailwind hidden/md:table */
+.table-scroll {
+  display: block;
+  width: 100%;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
 }
 
 @theme {

@@ -151,17 +151,19 @@ export default function ProductsPage() {
         </p>
       </div>
 
-      <div className="grid gap-6 xl:grid-cols-[1.3fr_0.7fr]">
-        <div className="rounded-2xl bg-white shadow-[var(--shadow)] md:overflow-hidden">
+      <div className="grid gap-4 md:gap-6 xl:grid-cols-[1.3fr_0.7fr]">
+        <div className="md:overflow-hidden md:rounded-2xl md:bg-white md:shadow-[var(--shadow)]">
           {loading ? (
-            <p className="p-6 text-sm text-[var(--text-muted)]">Loading products...</p>
+            <p className="rounded-2xl bg-white p-5 text-sm text-[var(--text-muted)] shadow-[var(--shadow)] md:rounded-none md:shadow-none">
+              Loading products...
+            </p>
           ) : (
             <>
-              <div className="space-y-3 p-3 md:hidden">
+              <div className="space-y-3 md:hidden">
                 {filtered.map((product) => (
                   <article
                     key={product.id}
-                    className="rounded-2xl border border-[var(--border)] p-4"
+                    className="rounded-2xl bg-white p-4 shadow-[var(--shadow)]"
                   >
                     <div className="flex items-start justify-between gap-3">
                       <div className="min-w-0">
@@ -247,7 +249,8 @@ export default function ProductsPage() {
                 ) : null}
               </div>
 
-              <table className="hidden w-full text-left text-sm md:table">
+              <div className="table-scroll hidden md:block">
+              <table className="w-full min-w-[720px] text-left text-sm">
                 <thead className="bg-canvas text-[var(--text-muted)]">
                   <tr>
                     <th className="px-4 py-3 font-medium">Product</th>
@@ -322,12 +325,13 @@ export default function ProductsPage() {
                   ))}
                 </tbody>
               </table>
+              </div>
             </>
           )}
         </div>
 
         {isAdmin ? (
-          <form onSubmit={handleSubmit} className="space-y-3 rounded-2xl bg-white p-5 shadow-[var(--shadow)]">
+          <form onSubmit={handleSubmit} className="space-y-3 rounded-2xl bg-white p-4 shadow-[var(--shadow)] sm:p-5">
             <h3 className="text-lg font-semibold">{form.id ? 'Edit product' : 'Add product'}</h3>
             {[
               ['name', 'Name'],
@@ -364,7 +368,7 @@ export default function ProductsPage() {
               </select>
             </label>
 
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
               <label className="block text-sm">
                 <span className="mb-1 block font-medium">Cost price (GHS)</span>
                 <input
@@ -373,7 +377,7 @@ export default function ProductsPage() {
                   step="0.01"
                   value={form.costPrice}
                   onChange={(e) => setForm({ ...form, costPrice: e.target.value })}
-                  className="w-full rounded-xl border border-[var(--border)] px-3 py-2.5 outline-none focus:border-hospital"
+                  className="w-full rounded-xl border border-[var(--border)] px-3 py-3 outline-none focus:border-hospital"
                   required
                 />
               </label>
@@ -385,7 +389,7 @@ export default function ProductsPage() {
                   step="0.01"
                   value={form.sellingPrice}
                   onChange={(e) => setForm({ ...form, sellingPrice: e.target.value })}
-                  className="w-full rounded-xl border border-[var(--border)] px-3 py-2.5 outline-none focus:border-hospital"
+                  className="w-full rounded-xl border border-[var(--border)] px-3 py-3 outline-none focus:border-hospital"
                   required
                 />
               </label>
