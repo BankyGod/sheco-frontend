@@ -117,50 +117,93 @@ export default function InventoryPage() {
         <AlertCard title="Expired batches" count={alerts.expired?.length || 0} tone="slate" />
       </div>
 
-      <div className="overflow-hidden rounded-2xl bg-white shadow-[var(--shadow)]">
+      <div className="md:overflow-hidden md:rounded-2xl md:bg-white md:shadow-[var(--shadow)]">
         {loading ? (
-          <p className="p-6 text-sm text-[var(--text-muted)]">Loading inventory...</p>
-        ) : (
-          <table className="w-full text-left text-sm">
-            <thead className="bg-canvas text-[var(--text-muted)]">
-              <tr>
-                <th className="px-4 py-3 font-medium">Product</th>
-                <th className="px-4 py-3 font-medium">Batch</th>
-                <th className="px-4 py-3 font-medium">Expiry</th>
-                <th className="px-4 py-3 font-medium">Remaining</th>
-                <th className="px-4 py-3 font-medium">Cost</th>
-                <th className="px-4 py-3 font-medium">Supplier</th>
-                <th className="px-4 py-3 font-medium">Status</th>
-              </tr>
-            </thead>
-            <tbody>
+          <p className="rounded-2xl bg-white p-5 text-sm text-[var(--text-muted)] shadow-[var(--shadow)] md:rounded-none md:p-6 md:shadow-none">
+            Loading inventory...
+          </p>
+        ) : allBatches.length ? (
+          <>
+            <div className="space-y-3 md:hidden">
               {allBatches.map((batch) => (
-                <tr key={batch.id} className="border-t border-[var(--border)]">
-                  <td className="px-4 py-3 font-medium">{batch.productName}</td>
-                  <td className="px-4 py-3">{batch.batchNumber}</td>
-                  <td className="px-4 py-3">{batch.expiryDate}</td>
-                  <td className="px-4 py-3">{batch.quantityRemaining}</td>
-                  <td className="px-4 py-3">{formatGhs(batch.costPrice)}</td>
-                  <td className="px-4 py-3">{batch.supplier}</td>
-                  <td className="px-4 py-3">
-                    {batch.expired ? (
-                      <span className="rounded-full bg-red-50 px-2 py-1 text-xs font-semibold text-red-600">
-                        Expired
-                      </span>
-                    ) : batch.daysToExpiry <= 90 ? (
-                      <span className="rounded-full bg-amber-50 px-2 py-1 text-xs font-semibold text-amber-700">
-                        {batch.daysToExpiry}d left
-                      </span>
-                    ) : (
-                      <span className="rounded-full bg-emerald-50 px-2 py-1 text-xs font-semibold text-emerald-700">
-                        OK
-                      </span>
-                    )}
-                  </td>
-                </tr>
+                <article key={batch.id} className="rounded-2xl bg-white p-4 shadow-[var(--shadow)]">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <p className="font-semibold text-[var(--text)]">{batch.productName}</p>
+                      <p className="mt-0.5 text-xs text-[var(--text-muted)]">
+                        Batch {batch.batchNumber}
+                      </p>
+                    </div>
+                    <BatchStatus batch={batch} compact />
+                  </div>
+
+                  <div className="mt-3 grid grid-cols-2 gap-2 text-sm">
+                    <div className="rounded-xl bg-canvas px-3 py-2">
+                      <p className="text-[10px] uppercase tracking-wide text-[var(--text-muted)]">
+                        Expiry
+                      </p>
+                      <p className="whitespace-nowrap font-medium">{batch.expiryDate || '—'}</p>
+                    </div>
+                    <div className="rounded-xl bg-canvas px-3 py-2">
+                      <p className="text-[10px] uppercase tracking-wide text-[var(--text-muted)]">
+                        Remaining
+                      </p>
+                      <p className="font-semibold">{batch.quantityRemaining}</p>
+                    </div>
+                    <div className="rounded-xl bg-canvas px-3 py-2">
+                      <p className="text-[10px] uppercase tracking-wide text-[var(--text-muted)]">
+                        Cost
+                      </p>
+                      <p className="font-medium">{formatGhs(batch.costPrice)}</p>
+                    </div>
+                    <div className="rounded-xl bg-canvas px-3 py-2">
+                      <p className="text-[10px] uppercase tracking-wide text-[var(--text-muted)]">
+                        Supplier
+                      </p>
+                      <p className="truncate font-medium">{batch.supplier || '—'}</p>
+                    </div>
+                  </div>
+                </article>
               ))}
-            </tbody>
-          </table>
+            </div>
+
+            <div className="hidden md:block">
+              <div className="table-scroll">
+                <table className="w-full min-w-[720px] text-left text-sm">
+                  <thead className="bg-canvas text-[var(--text-muted)]">
+                    <tr>
+                      <th className="px-4 py-3 font-medium">Product</th>
+                      <th className="px-4 py-3 font-medium">Batch</th>
+                      <th className="px-4 py-3 font-medium">Expiry</th>
+                      <th className="px-4 py-3 font-medium">Remaining</th>
+                      <th className="px-4 py-3 font-medium">Cost</th>
+                      <th className="px-4 py-3 font-medium">Supplier</th>
+                      <th className="px-4 py-3 font-medium">Status</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {allBatches.map((batch) => (
+                      <tr key={batch.id} className="border-t border-[var(--border)]">
+                        <td className="px-4 py-3 font-medium">{batch.productName}</td>
+                        <td className="whitespace-nowrap px-4 py-3">{batch.batchNumber}</td>
+                        <td className="whitespace-nowrap px-4 py-3">{batch.expiryDate}</td>
+                        <td className="px-4 py-3">{batch.quantityRemaining}</td>
+                        <td className="whitespace-nowrap px-4 py-3">{formatGhs(batch.costPrice)}</td>
+                        <td className="px-4 py-3">{batch.supplier}</td>
+                        <td className="px-4 py-3">
+                          <BatchStatus batch={batch} />
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </>
+        ) : (
+          <p className="rounded-2xl bg-white p-5 text-sm text-[var(--text-muted)] shadow-[var(--shadow)] md:rounded-none md:p-6 md:shadow-none">
+            No batches yet. Record a restock to add stock.
+          </p>
         )}
       </div>
 
@@ -264,6 +307,29 @@ export default function InventoryPage() {
         </form>
       </div>
     </div>
+  )
+}
+
+function BatchStatus({ batch, compact = false }) {
+  const size = compact ? 'text-[10px]' : 'text-xs'
+  if (batch.expired) {
+    return (
+      <span className={`rounded-full bg-red-50 px-2 py-1 font-semibold text-red-600 ${size}`}>
+        Expired
+      </span>
+    )
+  }
+  if (batch.daysToExpiry <= 90) {
+    return (
+      <span className={`rounded-full bg-amber-50 px-2 py-1 font-semibold text-amber-700 ${size}`}>
+        {batch.daysToExpiry}d left
+      </span>
+    )
+  }
+  return (
+    <span className={`rounded-full bg-emerald-50 px-2 py-1 font-semibold text-emerald-700 ${size}`}>
+      OK
+    </span>
   )
 }
 
