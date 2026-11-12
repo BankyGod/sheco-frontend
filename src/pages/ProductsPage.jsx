@@ -249,7 +249,8 @@ export default function ProductsPage() {
                 ) : null}
               </div>
 
-              <div className="table-scroll hidden md:block">
+              <div className="hidden md:block">
+              <div className="table-scroll">
               <table className="w-full min-w-[720px] text-left text-sm">
                 <thead className="bg-canvas text-[var(--text-muted)]">
                   <tr>
@@ -325,6 +326,7 @@ export default function ProductsPage() {
                   ))}
                 </tbody>
               </table>
+              </div>
               </div>
             </>
           )}
