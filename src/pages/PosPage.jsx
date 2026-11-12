@@ -1,5 +1,6 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate, useOutletContext } from 'react-router-dom'
+import { Search, X } from 'lucide-react'
 import { listProducts } from '../api/inventory'
 import { completeSale } from '../api/sales'
 import { useAuth } from '../context/AuthContext'
@@ -21,6 +22,7 @@ export default function PosPage() {
   const [reference, setReference] = useState('')
   const [error, setError] = useState('')
   const [busy, setBusy] = useState(false)
+  const productSearchRef = useRef(null)
 
   const refresh = useCallback(async () => {
     try {
@@ -52,11 +54,23 @@ export default function PosPage() {
     return () => window.removeEventListener('sheco:synced', onSynced)
   }, [refresh])
 
-  const filtered = products.filter((p) => {
+  const filtered = useMemo(() => {
     const q = search.trim().toLowerCase()
-    if (!q) return true
-    return p.name.toLowerCase().includes(q) || p.genericName.toLowerCase().includes(q)
-  })
+    if (!q) return products
+    return products.filter((p) => {
+      const name = String(p.name || '').toLowerCase()
+      const generic = String(p.genericName || '').toLowerCase()
+      const category = String(p.category || '').toLowerCase()
+      return name.includes(q) || generic.includes(q) || category.includes(q)
+    })
+  }, [products, search])
+
+  useEffect(() => {
+    // Keep the product finder ready on POS open (desktop + tablet).
+    if (typeof window !== 'undefined' && window.matchMedia('(min-width: 768px)').matches) {
+      productSearchRef.current?.focus()
+    }
+  }, [])
 
   const total = cart.reduce((sum, line) => sum + line.sellingPrice * line.quantity, 0)
   const tenderedPesewas = toPesewas(amountTendered || 0)
@@ -183,10 +197,48 @@ export default function PosPage() {
       <div>
         <h2 className="text-3xl font-semibold tracking-tight">{isAdmin ? 'Point of Sale' : 'New Sale'}</h2>
         <p className="mt-1 text-sm text-[var(--text-muted)]">
-          Search products, build a cart, take cash or Mobile Money.
+          Search a product, tap to add it to the cart, then take cash or Mobile Money.
           {!online
             ? ` Working offline — sale will queue for sync. Catalogue from ${catalogueAgeLabel}.`
             : ''}
+        </p>
+      </div>
+
+      <div className="sticky top-[4.25rem] z-20 -mx-1 space-y-2 rounded-2xl bg-canvas/95 px-1 py-2 backdrop-blur-md md:static md:mx-0 md:bg-transparent md:p-0 md:backdrop-blur-none">
+        <label className="relative block">
+          <Search
+            size={18}
+            className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-hospital-dark"
+          />
+          <input
+            ref={productSearchRef}
+            value={search}
+            onChange={(e) => setSearch?.(e.target.value)}
+            placeholder="Search product name, generic, or category..."
+            className="w-full rounded-2xl border border-hospital-soft bg-white py-3.5 pl-11 pr-11 text-sm font-medium shadow-[var(--shadow)] outline-none transition focus:border-hospital focus:ring-2 focus:ring-hospital/20"
+            autoComplete="off"
+            inputMode="search"
+            enterKeyHint="search"
+            aria-label="Search products for sale"
+          />
+          {search ? (
+            <button
+              type="button"
+              onClick={() => {
+                setSearch?.('')
+                productSearchRef.current?.focus()
+              }}
+              className="absolute right-2 top-1/2 flex h-9 w-9 -translate-y-1/2 items-center justify-center rounded-full bg-hospital-light text-hospital-dark"
+              aria-label="Clear product search"
+            >
+              <X size={16} />
+            </button>
+          ) : null}
+        </label>
+        <p className="px-1 text-xs text-[var(--text-muted)]">
+          {search.trim()
+            ? `${filtered.length} match${filtered.length === 1 ? '' : 'es'} · tap a product to add to cart`
+            : `${products.length} products available · start typing to find one fast`}
         </p>
       </div>
 
@@ -197,7 +249,11 @@ export default function PosPage() {
               <button
                 key={product.id}
                 type="button"
-                onClick={() => addToCart(product)}
+                onClick={() => {
+                  addToCart(product)
+                  // Keep typing flow fast for the next item.
+                  productSearchRef.current?.focus()
+                }}
                 className="rounded-2xl border border-[var(--border)] p-3.5 text-left transition active:scale-[0.99] hover:border-hospital hover:bg-hospital-light/40 sm:p-4"
               >
                 <div className="flex items-start justify-between gap-2">
@@ -220,6 +276,11 @@ export default function PosPage() {
               </button>
             ))}
           </div>
+          {!filtered.length ? (
+            <p className="mt-4 rounded-xl bg-canvas px-4 py-3 text-sm text-[var(--text-muted)]">
+              No products match “{search.trim()}”. Try another name or clear the search.
+            </p>
+          ) : null}
         </div>
 
         <div className="order-1 space-y-4 rounded-2xl bg-white p-4 shadow-[var(--shadow)] sm:p-5 xl:order-2 xl:sticky xl:top-24 xl:self-start">
