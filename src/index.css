@@ -54,9 +54,8 @@ textarea {
   }
 }
 
-/* Only opt-in tables scroll horizontally — never override Tailwind hidden/md:table */
+/* Horizontal scroll helper — do NOT set display here (would override Tailwind hidden) */
 .table-scroll {
-  display: block;
   width: 100%;
   overflow-x: auto;
   -webkit-overflow-scrolling: touch;
