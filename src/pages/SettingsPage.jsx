@@ -10,6 +10,7 @@ import { saveQueuedSales, setCachedCatalogue } from '../utils/offlineStore'
 import { useAuth } from '../context/AuthContext'
 import { useOffline } from '../context/OfflineContext'
 import { getDeviceId } from '../utils/device'
+import PinInput from '../components/PinInput'
 
 export default function SettingsPage() {
   const { user, updateUser, isOfflineUnlock } = useAuth()
@@ -104,7 +105,6 @@ export default function SettingsPage() {
         username: user.username,
         name: user.name,
         role: user.role,
-        password: passwordForm.newPassword,
       })
       setPasswordForm({ currentPassword: '', newPassword: '', confirmPassword: '' })
       flash('Password changed')
@@ -119,6 +119,11 @@ export default function SettingsPage() {
     e.preventDefault()
     setSaving('pin')
     setError('')
+    if (!/^\d{4}$/.test(pinForm.newPin)) {
+      setError('PIN must be exactly 4 digits')
+      setSaving('')
+      return
+    }
     if (pinForm.newPin !== pinForm.confirmPin) {
       setError('New PIN and confirmation do not match')
       setSaving('')
@@ -128,6 +133,12 @@ export default function SettingsPage() {
       await changePin({
         currentPassword: pinForm.currentPassword,
         newPin: pinForm.newPin,
+      })
+      await refreshOfflineUnlock({
+        username: user.username,
+        name: user.name,
+        role: user.role,
+        pin: pinForm.newPin,
       })
       setPinForm({ currentPassword: '', newPin: '', confirmPin: '' })
       flash('Offline PIN updated')
@@ -290,31 +301,25 @@ export default function SettingsPage() {
               required
             />
           </label>
-          <label className="block text-sm">
-            <span className="mb-1 block font-medium">New PIN</span>
-            <input
-              type="password"
+          <div className="space-y-2">
+            <span className="block text-sm font-medium">New 4-digit PIN</span>
+            <PinInput
               value={pinForm.newPin}
-              onChange={(e) => setPinForm({ ...pinForm, newPin: e.target.value })}
-              className="w-full rounded-xl border border-[var(--border)] px-3 py-2.5 outline-none focus:border-hospital"
-              required
-              minLength={4}
+              onChange={(newPin) => setPinForm({ ...pinForm, newPin })}
+              idPrefix="settings-new-pin"
             />
-          </label>
-          <label className="block text-sm">
-            <span className="mb-1 block font-medium">Confirm PIN</span>
-            <input
-              type="password"
+          </div>
+          <div className="space-y-2">
+            <span className="block text-sm font-medium">Confirm PIN</span>
+            <PinInput
               value={pinForm.confirmPin}
-              onChange={(e) => setPinForm({ ...pinForm, confirmPin: e.target.value })}
-              className="w-full rounded-xl border border-[var(--border)] px-3 py-2.5 outline-none focus:border-hospital"
-              required
-              minLength={4}
+              onChange={(confirmPin) => setPinForm({ ...pinForm, confirmPin })}
+              idPrefix="settings-confirm-pin"
             />
-          </label>
+          </div>
           <button
             type="submit"
-            disabled={saving === 'pin'}
+            disabled={saving === 'pin' || pinForm.newPin.length !== 4 || pinForm.confirmPin.length !== 4}
             className="w-full rounded-xl bg-hospital py-3 font-semibold text-white disabled:opacity-60"
           >
             {saving === 'pin' ? 'Updating...' : 'Update PIN'}
