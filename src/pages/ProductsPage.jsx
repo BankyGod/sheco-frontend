@@ -1,9 +1,10 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { useOutletContext } from 'react-router-dom'
-import { listProducts, saveProduct } from '../api/inventory'
+import { importProductsBulk, listProducts, saveProduct } from '../api/inventory'
 import { useAuth } from '../context/AuthContext'
 import { formatGhs, toPesewas, fromPesewas } from '../utils/money'
 import { useOffline } from '../context/OfflineContext'
+import { downloadProductCsvTemplate, parseProductCsv } from '../utils/productCsv'
 
 const UNIT_OPTIONS = [
   'tablet',
@@ -42,6 +43,9 @@ export default function ProductsPage() {
   const [form, setForm] = useState(emptyForm)
   const [message, setMessage] = useState('')
   const [error, setError] = useState('')
+  const [importing, setImporting] = useState(false)
+  const [importSummary, setImportSummary] = useState('')
+  const csvInputRef = useRef(null)
 
   const refresh = useCallback(async () => {
     setLoading(true)
@@ -104,6 +108,7 @@ export default function ProductsPage() {
     e.preventDefault()
     setError('')
     setMessage('')
+    setImportSummary('')
 
     const cost = toPesewas(form.costPrice)
     const selling = toPesewas(form.sellingPrice)
@@ -139,6 +144,60 @@ export default function ProductsPage() {
       await refresh()
     } catch (err) {
       setError(err.message)
+    }
+  }
+
+  async function handleCsvImport(file) {
+    if (!file) return
+    setError('')
+    setMessage('')
+    setImportSummary('')
+    setImporting(true)
+
+    try {
+      const text = await file.text()
+      const { products, errors: parseErrors } = parseProductCsv(text)
+
+      if (!products.length) {
+        const first = parseErrors[0]
+        throw new Error(
+          first
+            ? `CSV row ${first.row}: ${first.error}`
+            : 'No valid product rows found in CSV',
+        )
+      }
+
+      const result = await importProductsBulk(products)
+      const serverFailed = (result.results || []).filter((row) => !row.ok)
+      const failedTotal = parseErrors.length + (result.failed || serverFailed.length)
+      const created = result.created || 0
+
+      const failureNotes = [
+        ...parseErrors.slice(0, 3).map((row) => `Row ${row.row}: ${row.error}`),
+        ...serverFailed.slice(0, 3).map((row) => `Row ${row.row}: ${row.error}`),
+      ]
+
+      setImportSummary(
+        [
+          `Imported ${created} product${created === 1 ? '' : 's'}`,
+          failedTotal ? `${failedTotal} failed` : null,
+          failureNotes.length ? failureNotes.join(' · ') : null,
+        ]
+          .filter(Boolean)
+          .join('. '),
+      )
+
+      if (created > 0) {
+        setMessage(`CSV import finished: ${created} created`)
+        await refresh()
+      } else {
+        setError(failureNotes[0] || 'CSV import failed')
+      }
+    } catch (err) {
+      setError(err.message || 'Could not import CSV')
+    } finally {
+      setImporting(false)
+      if (csvInputRef.current) csvInputRef.current.value = ''
     }
   }
 
@@ -333,6 +392,46 @@ export default function ProductsPage() {
         </div>
 
         {isAdmin ? (
+          <div className="space-y-4">
+            <div className="space-y-3 rounded-2xl bg-white p-4 shadow-[var(--shadow)] sm:p-5">
+              <div className="flex flex-wrap items-start justify-between gap-3">
+                <div>
+                  <h3 className="text-lg font-semibold">Bulk CSV import</h3>
+                  <p className="mt-1 text-sm text-[var(--text-muted)]">
+                    Upload a CSV to add many products at once. Prices are in GHS.
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  className="rounded-lg border border-[var(--border)] px-3 py-1.5 text-xs font-semibold text-hospital-dark"
+                  onClick={downloadProductCsvTemplate}
+                >
+                  Download template
+                </button>
+              </div>
+
+              <input
+                ref={csvInputRef}
+                type="file"
+                accept=".csv,text/csv"
+                className="block w-full text-sm text-[var(--text-muted)] file:mr-3 file:rounded-lg file:border-0 file:bg-hospital-light file:px-3 file:py-2 file:text-xs file:font-semibold file:text-hospital-dark"
+                disabled={importing}
+                onChange={(e) => handleCsvImport(e.target.files?.[0])}
+              />
+
+              <p className="text-xs text-[var(--text-muted)]">
+                Columns: name, genericName, category, unit, costPrice, sellingPrice,
+                reorderLevel, prescriptionOnly, active
+              </p>
+
+              {importing ? (
+                <p className="text-sm text-[var(--text-muted)]">Importing products...</p>
+              ) : null}
+              {importSummary ? (
+                <p className="text-sm text-hospital-dark">{importSummary}</p>
+              ) : null}
+            </div>
+
           <form onSubmit={handleSubmit} className="space-y-3 rounded-2xl bg-white p-4 shadow-[var(--shadow)] sm:p-5">
             <h3 className="text-lg font-semibold">{form.id ? 'Edit product' : 'Add product'}</h3>
             {[
@@ -445,6 +544,7 @@ export default function ProductsPage() {
                     setForm(emptyForm)
                     setError('')
                     setMessage('')
+                    setImportSummary('')
                   }}
                 >
                   Cancel
@@ -452,6 +552,7 @@ export default function ProductsPage() {
               ) : null}
             </div>
           </form>
+          </div>
         ) : null}
       </div>
     </div>

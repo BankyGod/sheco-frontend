@@ -35,6 +35,25 @@ export async function saveProduct(payload) {
   })
 }
 
+export async function importProductsBulk(products) {
+  return apiRequest('/products/bulk', {
+    method: 'POST',
+    body: {
+      products: products.map((payload) => ({
+        name: payload.name,
+        genericName: payload.genericName,
+        category: payload.category,
+        unit: payload.unit,
+        costPrice: payload.costPrice,
+        sellingPrice: payload.sellingPrice,
+        reorderLevel: payload.reorderLevel,
+        prescriptionOnly: payload.prescriptionOnly,
+        active: payload.active,
+      })),
+    },
+  })
+}
+
 export async function restock(payload) {
   return apiRequest('/inventory/restock', {
     method: 'POST',
