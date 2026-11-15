@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useOutletContext } from 'react-router-dom'
+import { LayoutGrid, List, PlusCircle, X } from 'lucide-react'
 import { importProductsBulk, listProducts, saveProduct } from '../api/inventory'
 import { useAuth } from '../context/AuthContext'
 import { formatGhs, toPesewas, fromPesewas } from '../utils/money'
@@ -40,6 +41,8 @@ export default function ProductsPage() {
   const { search = '' } = useOutletContext() || {}
   const [products, setProducts] = useState([])
   const [loading, setLoading] = useState(true)
+  const [mobileViewMode, setMobileViewMode] = useState('cards') // 'cards' | 'table'
+  const [isFormOpen, setIsFormOpen] = useState(false)
   const [form, setForm] = useState(emptyForm)
   const [message, setMessage] = useState('')
   const [error, setError] = useState('')
@@ -90,6 +93,7 @@ export default function ProductsPage() {
   function editProduct(product) {
     setError('')
     setMessage('')
+    setImportSummary('')
     setForm({
       id: product.id,
       name: product.name,
@@ -102,6 +106,15 @@ export default function ProductsPage() {
       prescriptionOnly: product.prescriptionOnly,
       active: product.active,
     })
+    setIsFormOpen(true)
+  }
+
+  function openAddProduct() {
+    setError('')
+    setMessage('')
+    setImportSummary('')
+    setForm(emptyForm)
+    setIsFormOpen(true)
   }
 
   async function handleSubmit(e) {
@@ -139,8 +152,10 @@ export default function ProductsPage() {
         prescriptionOnly: Boolean(form.prescriptionOnly),
         active: Boolean(form.active),
       })
+      const isEdit = Boolean(form.id)
       setForm(emptyForm)
-      setMessage(form.id ? 'Product updated' : 'Product created')
+      setIsFormOpen(false)
+      setMessage(isEdit ? 'Product updated successfully' : 'Product created successfully')
       await refresh()
     } catch (err) {
       setError(err.message)
@@ -156,45 +171,23 @@ export default function ProductsPage() {
 
     try {
       const text = await file.text()
-      const { products, errors: parseErrors } = parseProductCsv(text)
-
-      if (!products.length) {
-        const first = parseErrors[0]
-        throw new Error(
-          first
-            ? `CSV row ${first.row}: ${first.error}`
-            : 'No valid product rows found in CSV',
-        )
+      const { rows, errors } = parseProductCsv(text)
+      if (errors.length) {
+        throw new Error(errors.join('; '))
+      }
+      if (!rows.length) {
+        throw new Error('CSV file contains no valid product rows')
       }
 
-      const result = await importProductsBulk(products)
-      const serverFailed = (result.results || []).filter((row) => !row.ok)
-      const failedTotal = parseErrors.length + (result.failed || serverFailed.length)
-      const created = result.created || 0
-
-      const failureNotes = [
-        ...parseErrors.slice(0, 3).map((row) => `Row ${row.row}: ${row.error}`),
-        ...serverFailed.slice(0, 3).map((row) => `Row ${row.row}: ${row.error}`),
-      ]
-
+      const result = await importProductsBulk(rows)
       setImportSummary(
-        [
-          `Imported ${created} product${created === 1 ? '' : 's'}`,
-          failedTotal ? `${failedTotal} failed` : null,
-          failureNotes.length ? failureNotes.join(' · ') : null,
-        ]
-          .filter(Boolean)
-          .join('. '),
+        `Import complete: ${result.created} created, ${result.updated} updated${
+          result.errors?.length ? `, ${result.errors.length} failed` : ''
+        }`,
       )
-
-      if (created > 0) {
-        setMessage(`CSV import finished: ${created} created`)
-        await refresh()
-      } else {
-        setError(failureNotes[0] || 'CSV import failed')
-      }
+      await refresh()
     } catch (err) {
-      setError(err.message || 'Could not import CSV')
+      setError(err.message || 'Failed to import CSV')
     } finally {
       setImporting(false)
       if (csvInputRef.current) csvInputRef.current.value = ''
@@ -203,26 +196,75 @@ export default function ProductsPage() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h2 className="text-3xl font-semibold tracking-tight">Products</h2>
-        <p className="mt-1 text-sm text-[var(--text-muted)]">
-          Manage catalogue, cost and selling prices, reorder levels, and Rx flags.
-        </p>
+      {/* Page Header */}
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+        <div>
+          <h2 className="text-3xl font-semibold tracking-tight">Products</h2>
+          <p className="mt-1 text-sm text-[var(--text-muted)]">
+            Manage catalogue, cost and selling prices, reorder levels, and Rx flags.
+          </p>
+        </div>
+
+        {/* Top Controls: Mobile View Switcher & Add Product Button */}
+        <div className="flex flex-wrap items-center justify-between gap-2.5 sm:justify-end">
+          {/* Mobile View Toggle */}
+          <div className="inline-flex self-start rounded-xl bg-canvas p-1 md:hidden">
+            <button
+              type="button"
+              onClick={() => setMobileViewMode('cards')}
+              className={`inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium transition ${
+                mobileViewMode === 'cards'
+                  ? 'bg-white font-semibold text-hospital-dark shadow-sm'
+                  : 'text-[var(--text-muted)]'
+              }`}
+            >
+              <LayoutGrid size={14} /> Cards
+            </button>
+            <button
+              type="button"
+              onClick={() => setMobileViewMode('table')}
+              className={`inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium transition ${
+                mobileViewMode === 'table'
+                  ? 'bg-white font-semibold text-hospital-dark shadow-sm'
+                  : 'text-[var(--text-muted)]'
+              }`}
+            >
+              <List size={14} /> Table
+            </button>
+          </div>
+
+          {/* Add Product Button (Accessible right at the top on all devices) */}
+          {isAdmin ? (
+            <button
+              type="button"
+              onClick={openAddProduct}
+              className="inline-flex items-center gap-1.5 rounded-xl bg-hospital px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-hospital-dark"
+            >
+              <PlusCircle size={16} /> Add Product
+            </button>
+          ) : null}
+        </div>
       </div>
 
-      <div className="grid gap-4 md:gap-6 xl:grid-cols-[1.3fr_0.7fr]">
-        <div className="md:overflow-hidden md:rounded-2xl md:bg-white md:shadow-[var(--shadow)]">
+      {message ? (
+        <div className="rounded-xl bg-emerald-50 px-4 py-3 text-sm font-medium text-emerald-800">
+          {message}
+        </div>
+      ) : null}
+
+      <div className="grid gap-4 md:gap-6 xl:grid-cols-[1.3fr_0.7fr] min-w-0">
+        {/* Products Catalogue Table / Cards Container */}
+        <div className="overflow-hidden rounded-2xl bg-white shadow-[var(--shadow)] w-full max-w-full min-w-0">
           {loading ? (
-            <p className="rounded-2xl bg-white p-5 text-sm text-[var(--text-muted)] shadow-[var(--shadow)] md:rounded-none md:shadow-none">
-              Loading products...
-            </p>
+            <p className="p-6 text-sm text-[var(--text-muted)]">Loading products...</p>
           ) : (
             <>
-              <div className="space-y-3 md:hidden">
+              {/* Mobile Card Layout */}
+              <div className={mobileViewMode === 'cards' ? 'space-y-3 p-3 md:hidden' : 'hidden'}>
                 {filtered.map((product) => (
                   <article
                     key={product.id}
-                    className="rounded-2xl bg-white p-4 shadow-[var(--shadow)]"
+                    className="rounded-2xl border border-[var(--border)] bg-canvas/40 p-4 transition hover:border-hospital-soft"
                   >
                     <div className="flex items-start justify-between gap-3">
                       <div className="min-w-0">
@@ -235,7 +277,7 @@ export default function ProductsPage() {
                       {isAdmin ? (
                         <button
                           type="button"
-                          className="shrink-0 rounded-lg bg-hospital-light px-3 py-1.5 text-xs font-semibold text-hospital-dark"
+                          className="shrink-0 rounded-lg bg-hospital-light px-3 py-1.5 text-xs font-semibold text-hospital-dark transition hover:bg-hospital hover:text-white"
                           onClick={() => editProduct(product)}
                         >
                           Edit
@@ -245,34 +287,34 @@ export default function ProductsPage() {
 
                     <div className="mt-3 grid grid-cols-2 gap-2 text-sm">
                       {isAdmin ? (
-                        <div className="rounded-xl bg-canvas px-3 py-2">
-                          <p className="text-[10px] uppercase tracking-wide text-[var(--text-muted)]">
-                            Cost
+                        <div className="rounded-xl bg-white p-2.5 border border-[var(--border)]">
+                          <p className="text-[10px] uppercase font-semibold text-[var(--text-muted)]">
+                            Cost Price
                           </p>
-                          <p className="font-medium">{formatGhs(product.costPrice || 0)}</p>
+                          <p className="font-medium text-xs mt-0.5">{formatGhs(product.costPrice || 0)}</p>
                         </div>
                       ) : null}
-                      <div className="rounded-xl bg-canvas px-3 py-2">
-                        <p className="text-[10px] uppercase tracking-wide text-[var(--text-muted)]">
-                          Selling
+                      <div className="rounded-xl bg-white p-2.5 border border-[var(--border)]">
+                        <p className="text-[10px] uppercase font-semibold text-[var(--text-muted)]">
+                          Selling Price
                         </p>
-                        <p className="font-medium">{formatGhs(product.sellingPrice)}</p>
+                        <p className="font-semibold text-xs mt-0.5">{formatGhs(product.sellingPrice)}</p>
                       </div>
                       {isAdmin ? (
-                        <div className="rounded-xl bg-canvas px-3 py-2">
-                          <p className="text-[10px] uppercase tracking-wide text-[var(--text-muted)]">
+                        <div className="rounded-xl bg-white p-2.5 border border-[var(--border)]">
+                          <p className="text-[10px] uppercase font-semibold text-[var(--text-muted)]">
                             Profit / unit
                           </p>
-                          <p className="font-medium text-emerald-700">
+                          <p className="font-semibold text-xs text-emerald-700 mt-0.5">
                             {formatGhs(product.unitProfit || 0)}
                           </p>
                         </div>
                       ) : null}
-                      <div className="rounded-xl bg-canvas px-3 py-2">
-                        <p className="text-[10px] uppercase tracking-wide text-[var(--text-muted)]">
+                      <div className="rounded-xl bg-white p-2.5 border border-[var(--border)]">
+                        <p className="text-[10px] uppercase font-semibold text-[var(--text-muted)]">
                           Stock
                         </p>
-                        <p className={product.lowStock ? 'font-semibold text-amber-600' : 'font-medium'}>
+                        <p className={`text-xs mt-0.5 ${product.lowStock ? 'font-bold text-amber-600' : 'font-medium'}`}>
                           {product.availableQty}
                           <span className="font-normal text-[var(--text-muted)]"> / {product.unit}</span>
                         </p>
@@ -287,7 +329,7 @@ export default function ProductsPage() {
                       ) : null}
                       {product.lowStock ? (
                         <span className="rounded-full bg-amber-50 px-2 py-0.5 text-[10px] font-semibold text-amber-700">
-                          Low
+                          Low stock
                         </span>
                       ) : null}
                       {product.expiringSoon ? (
@@ -308,91 +350,100 @@ export default function ProductsPage() {
                 ) : null}
               </div>
 
-              <div className="hidden md:block">
-              <div className="table-scroll">
-              <table className="w-full min-w-[720px] text-left text-sm">
-                <thead className="bg-canvas text-[var(--text-muted)]">
-                  <tr>
-                    <th className="px-4 py-3 font-medium">Product</th>
-                    <th className="px-4 py-3 font-medium">Category</th>
-                    {isAdmin ? <th className="px-4 py-3 font-medium">Cost</th> : null}
-                    <th className="px-4 py-3 font-medium">Selling</th>
-                    {isAdmin ? <th className="px-4 py-3 font-medium">Profit / unit</th> : null}
-                    <th className="px-4 py-3 font-medium">Stock</th>
-                    <th className="px-4 py-3 font-medium">Flags</th>
-                    <th className="px-4 py-3 font-medium" />
-                  </tr>
-                </thead>
-                <tbody>
-                  {filtered.map((product) => (
-                    <tr key={product.id} className="border-t border-[var(--border)]">
-                      <td className="px-4 py-3">
-                        <p className="font-medium">{product.name}</p>
-                        <p className="text-xs text-[var(--text-muted)]">{product.genericName}</p>
-                      </td>
-                      <td className="px-4 py-3">{product.category}</td>
-                      {isAdmin ? (
-                        <td className="px-4 py-3">{formatGhs(product.costPrice || 0)}</td>
-                      ) : null}
-                      <td className="px-4 py-3">{formatGhs(product.sellingPrice)}</td>
-                      {isAdmin ? (
-                        <td className="px-4 py-3 font-medium text-emerald-700">
-                          {formatGhs(product.unitProfit || 0)}
-                        </td>
-                      ) : null}
-                      <td className="px-4 py-3">
-                        <span className={product.lowStock ? 'font-semibold text-amber-600' : ''}>
-                          {product.availableQty}
-                        </span>
-                        <span className="text-[var(--text-muted)]"> / {product.unit}</span>
-                      </td>
-                      <td className="px-4 py-3">
-                        <div className="flex flex-wrap gap-1">
-                          {product.prescriptionOnly ? (
-                            <span className="rounded-full bg-hospital-light px-2 py-0.5 text-[10px] font-semibold text-hospital-dark">
-                              Rx
-                            </span>
+              {/* Table Layout */}
+              <div className={mobileViewMode === 'table' ? 'block' : 'hidden md:block'}>
+                {mobileViewMode === 'table' && (
+                  <p className="px-4 py-1.5 text-[11px] text-[var(--text-muted)] bg-slate-50 border-b border-[var(--border)] md:hidden">
+                    ← Swipe table horizontally to view all columns →
+                  </p>
+                )}
+                <div className="table-scroll">
+                  <table className="w-full min-w-[720px] text-left text-sm">
+                    <thead className="bg-canvas text-[var(--text-muted)]">
+                      <tr>
+                        <th className="sticky left-0 bg-canvas z-20 px-4 py-3 font-medium shadow-[1px_0_0_0_#e5e7eb] min-w-[150px]">
+                          Product
+                        </th>
+                        <th className="px-4 py-3 font-medium">Category</th>
+                        {isAdmin ? <th className="px-4 py-3 font-medium">Cost</th> : null}
+                        <th className="px-4 py-3 font-medium">Selling</th>
+                        {isAdmin ? <th className="px-4 py-3 font-medium">Profit / unit</th> : null}
+                        <th className="px-4 py-3 font-medium">Stock</th>
+                        <th className="px-4 py-3 font-medium">Flags</th>
+                        <th className="px-4 py-3 font-medium text-right" />
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {filtered.map((product) => (
+                        <tr key={product.id} className="border-t border-[var(--border)] hover:bg-slate-50/50">
+                          <td className="sticky left-0 bg-white z-10 px-4 py-3 shadow-[1px_0_0_0_#e5e7eb] min-w-[150px]">
+                            <p className="font-medium">{product.name}</p>
+                            <p className="text-xs text-[var(--text-muted)]">{product.genericName}</p>
+                          </td>
+                          <td className="whitespace-nowrap px-4 py-3">{product.category}</td>
+                          {isAdmin ? (
+                            <td className="whitespace-nowrap px-4 py-3">{formatGhs(product.costPrice || 0)}</td>
                           ) : null}
-                          {product.lowStock ? (
-                            <span className="rounded-full bg-amber-50 px-2 py-0.5 text-[10px] font-semibold text-amber-700">
-                              Low
-                            </span>
+                          <td className="whitespace-nowrap px-4 py-3">{formatGhs(product.sellingPrice)}</td>
+                          {isAdmin ? (
+                            <td className="whitespace-nowrap px-4 py-3 font-medium text-emerald-700">
+                              {formatGhs(product.unitProfit || 0)}
+                            </td>
                           ) : null}
-                          {product.expiringSoon ? (
-                            <span className="rounded-full bg-red-50 px-2 py-0.5 text-[10px] font-semibold text-red-600">
-                              Expiring
+                          <td className="whitespace-nowrap px-4 py-3">
+                            <span className={product.lowStock ? 'font-semibold text-amber-600' : ''}>
+                              {product.availableQty}
                             </span>
-                          ) : null}
-                          {!product.active ? (
-                            <span className="rounded-full bg-canvas px-2 py-0.5 text-[10px] font-semibold">
-                              Inactive
-                            </span>
-                          ) : null}
-                        </div>
-                      </td>
-                      <td className="px-4 py-3">
-                        {isAdmin ? (
-                          <button
-                            type="button"
-                            className="text-xs font-semibold text-hospital-dark"
-                            onClick={() => editProduct(product)}
-                          >
-                            Edit
-                          </button>
-                        ) : null}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-              </div>
+                            <span className="text-[var(--text-muted)]"> / {product.unit}</span>
+                          </td>
+                          <td className="whitespace-nowrap px-4 py-3">
+                            <div className="flex flex-wrap gap-1">
+                              {product.prescriptionOnly ? (
+                                <span className="rounded-full bg-hospital-light px-2 py-0.5 text-[10px] font-semibold text-hospital-dark">
+                                  Rx
+                                </span>
+                              ) : null}
+                              {product.lowStock ? (
+                                <span className="rounded-full bg-amber-50 px-2 py-0.5 text-[10px] font-semibold text-amber-700">
+                                  Low
+                                </span>
+                              ) : null}
+                              {product.expiringSoon ? (
+                                <span className="rounded-full bg-red-50 px-2 py-0.5 text-[10px] font-semibold text-red-600">
+                                  Expiring
+                                </span>
+                              ) : null}
+                              {!product.active ? (
+                                <span className="rounded-full bg-canvas px-2 py-0.5 text-[10px] font-semibold">
+                                  Inactive
+                                </span>
+                              ) : null}
+                            </div>
+                          </td>
+                          <td className="whitespace-nowrap px-4 py-3 text-right">
+                            {isAdmin ? (
+                              <button
+                                type="button"
+                                className="rounded-lg bg-hospital-light px-2.5 py-1 text-xs font-semibold text-hospital-dark transition hover:bg-hospital hover:text-white"
+                                onClick={() => editProduct(product)}
+                              >
+                                Edit
+                              </button>
+                            ) : null}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
               </div>
             </>
           )}
         </div>
 
+        {/* Desktop Sidebar: Bulk CSV Import & Form (shown on desktop screens) */}
         {isAdmin ? (
-          <div className="space-y-4">
+          <div className="hidden xl:block space-y-4">
             <div className="space-y-3 rounded-2xl bg-white p-4 shadow-[var(--shadow)] sm:p-5">
               <div className="flex flex-wrap items-start justify-between gap-3">
                 <div>
@@ -403,7 +454,7 @@ export default function ProductsPage() {
                 </div>
                 <button
                   type="button"
-                  className="rounded-lg border border-[var(--border)] px-3 py-1.5 text-xs font-semibold text-hospital-dark"
+                  className="rounded-lg border border-[var(--border)] px-3 py-1.5 text-xs font-semibold text-hospital-dark transition hover:bg-slate-50"
                   onClick={downloadProductCsvTemplate}
                 >
                   Download template
@@ -432,129 +483,193 @@ export default function ProductsPage() {
               ) : null}
             </div>
 
-          <form onSubmit={handleSubmit} className="space-y-3 rounded-2xl bg-white p-4 shadow-[var(--shadow)] sm:p-5">
-            <h3 className="text-lg font-semibold">{form.id ? 'Edit product' : 'Add product'}</h3>
-            {[
-              ['name', 'Name'],
-              ['genericName', 'Generic name'],
-              ['category', 'Category'],
-            ].map(([key, label]) => (
-              <label key={key} className="block text-sm">
-                <span className="mb-1 block font-medium">{label}</span>
-                <input
-                  value={form[key]}
-                  onChange={(e) => setForm({ ...form, [key]: e.target.value })}
-                  className="w-full rounded-xl border border-[var(--border)] px-3 py-2.5 outline-none focus:border-hospital"
-                  required
-                />
-              </label>
-            ))}
-
-            <label className="block text-sm">
-              <span className="mb-1 block font-medium">Unit</span>
-              <select
-                value={form.unit}
-                onChange={(e) => setForm({ ...form, unit: e.target.value })}
-                className="w-full rounded-xl border border-[var(--border)] px-3 py-2.5 outline-none focus:border-hospital"
-                required
-              >
-                {UNIT_OPTIONS.map((unit) => (
-                  <option key={unit} value={unit}>
-                    {unit}
-                  </option>
-                ))}
-                {form.unit && !UNIT_OPTIONS.includes(form.unit) ? (
-                  <option value={form.unit}>{form.unit}</option>
-                ) : null}
-              </select>
-            </label>
-
-            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-              <label className="block text-sm">
-                <span className="mb-1 block font-medium">Cost price (GHS)</span>
-                <input
-                  type="number"
-                  min="0"
-                  step="0.01"
-                  value={form.costPrice}
-                  onChange={(e) => setForm({ ...form, costPrice: e.target.value })}
-                  className="w-full rounded-xl border border-[var(--border)] px-3 py-3 outline-none focus:border-hospital"
-                  required
-                />
-              </label>
-              <label className="block text-sm">
-                <span className="mb-1 block font-medium">Selling price (GHS)</span>
-                <input
-                  type="number"
-                  min="0"
-                  step="0.01"
-                  value={form.sellingPrice}
-                  onChange={(e) => setForm({ ...form, sellingPrice: e.target.value })}
-                  className="w-full rounded-xl border border-[var(--border)] px-3 py-3 outline-none focus:border-hospital"
-                  required
-                />
-              </label>
+            <div className="rounded-2xl bg-white p-5 shadow-[var(--shadow)]">
+              <h3 className="text-lg font-semibold mb-3">{form.id ? 'Edit product' : 'Add product'}</h3>
+              <ProductFormFields
+                form={form}
+                setForm={setForm}
+                handleSubmit={handleSubmit}
+                unitProfit={unitProfit}
+                error={error}
+                onCancel={form.id ? () => setForm(emptyForm) : null}
+              />
             </div>
-
-            {unitProfit != null ? (
-              <div className="rounded-xl bg-hospital-light px-3 py-2.5 text-sm text-hospital-dark">
-                Estimated profit / unit:{' '}
-                <span className="font-semibold">{formatGhs(unitProfit)}</span>
-              </div>
-            ) : null}
-
-            <label className="block text-sm">
-              <span className="mb-1 block font-medium">Reorder level</span>
-              <input
-                type="number"
-                min="0"
-                value={form.reorderLevel}
-                onChange={(e) => setForm({ ...form, reorderLevel: e.target.value })}
-                className="w-full rounded-xl border border-[var(--border)] px-3 py-2.5 outline-none focus:border-hospital"
-                required
-              />
-            </label>
-            <label className="flex items-center gap-2 text-sm">
-              <input
-                type="checkbox"
-                checked={form.prescriptionOnly}
-                onChange={(e) => setForm({ ...form, prescriptionOnly: e.target.checked })}
-              />
-              Prescription only
-            </label>
-            <label className="flex items-center gap-2 text-sm">
-              <input
-                type="checkbox"
-                checked={form.active}
-                onChange={(e) => setForm({ ...form, active: e.target.checked })}
-              />
-              Active
-            </label>
-            {error ? <p className="text-sm text-red-500">{error}</p> : null}
-            {message ? <p className="text-sm text-emerald-600">{message}</p> : null}
-            <div className="flex gap-2">
-              <button type="submit" className="flex-1 rounded-xl bg-hospital py-3 font-semibold text-white">
-                Save
-              </button>
-              {form.id ? (
-                <button
-                  type="button"
-                  className="rounded-xl bg-canvas px-4 py-3 font-semibold"
-                  onClick={() => {
-                    setForm(emptyForm)
-                    setError('')
-                    setMessage('')
-                    setImportSummary('')
-                  }}
-                >
-                  Cancel
-                </button>
-              ) : null}
-            </div>
-          </form>
           </div>
         ) : null}
       </div>
+
+      {/* Mobile & Tablet Modal / Bottom-Sheet: Add or Edit Product */}
+      {isAdmin && isFormOpen ? (
+        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/50 p-0 sm:p-4 backdrop-blur-xs">
+          <div className="w-full sm:max-w-lg max-h-[92vh] overflow-y-auto rounded-t-3xl sm:rounded-2xl bg-white p-5 shadow-2xl">
+            <div className="flex items-center justify-between pb-3 border-b border-[var(--border)] mb-4">
+              <div>
+                <h3 className="text-lg font-semibold">{form.id ? 'Edit Product' : 'Add New Product'}</h3>
+                <p className="text-xs text-[var(--text-muted)]">
+                  {form.id
+                    ? 'Update prices, catalogue flags, or stock reorder levels'
+                    : 'Add a new medication or product to the pharmacy catalogue'}
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  setIsFormOpen(false)
+                  setForm(emptyForm)
+                  setError('')
+                }}
+                className="rounded-full p-1.5 text-[var(--text-muted)] hover:bg-canvas transition"
+              >
+                <X size={20} />
+              </button>
+            </div>
+
+            <ProductFormFields
+              form={form}
+              setForm={setForm}
+              handleSubmit={handleSubmit}
+              unitProfit={unitProfit}
+              error={error}
+              onCancel={() => {
+                setIsFormOpen(false)
+                setForm(emptyForm)
+                setError('')
+              }}
+            />
+          </div>
+        </div>
+      ) : null}
     </div>
+  )
+}
+
+function ProductFormFields({ form, setForm, handleSubmit, unitProfit, error, onCancel }) {
+  return (
+    <form onSubmit={handleSubmit} className="space-y-3.5">
+      {[
+        ['name', 'Name', 'e.g. Amlodipine 5mg'],
+        ['genericName', 'Generic name', 'e.g. Amlodipine'],
+        ['category', 'Category', 'e.g. Hypertension, Antibiotic'],
+      ].map(([key, label, placeholder]) => (
+        <label key={key} className="block text-sm">
+          <span className="mb-1 block font-medium">{label}</span>
+          <input
+            value={form[key]}
+            onChange={(e) => setForm({ ...form, [key]: e.target.value })}
+            className="w-full rounded-xl border border-[var(--border)] px-3 py-2.5 text-sm outline-none focus:border-hospital"
+            required
+            placeholder={placeholder}
+          />
+        </label>
+      ))}
+
+      <label className="block text-sm">
+        <span className="mb-1 block font-medium">Unit</span>
+        <select
+          value={form.unit}
+          onChange={(e) => setForm({ ...form, unit: e.target.value })}
+          className="w-full rounded-xl border border-[var(--border)] px-3 py-2.5 text-sm outline-none focus:border-hospital"
+          required
+        >
+          {UNIT_OPTIONS.map((unit) => (
+            <option key={unit} value={unit}>
+              {unit}
+            </option>
+          ))}
+          {form.unit && !UNIT_OPTIONS.includes(form.unit) ? (
+            <option value={form.unit}>{form.unit}</option>
+          ) : null}
+        </select>
+      </label>
+
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+        <label className="block text-sm">
+          <span className="mb-1 block font-medium">Cost price (GHS)</span>
+          <input
+            type="number"
+            min="0"
+            step="0.01"
+            value={form.costPrice}
+            onChange={(e) => setForm({ ...form, costPrice: e.target.value })}
+            className="w-full rounded-xl border border-[var(--border)] px-3 py-2.5 text-sm outline-none focus:border-hospital"
+            required
+            placeholder="0.00"
+          />
+        </label>
+        <label className="block text-sm">
+          <span className="mb-1 block font-medium">Selling price (GHS)</span>
+          <input
+            type="number"
+            min="0"
+            step="0.01"
+            value={form.sellingPrice}
+            onChange={(e) => setForm({ ...form, sellingPrice: e.target.value })}
+            className="w-full rounded-xl border border-[var(--border)] px-3 py-2.5 text-sm outline-none focus:border-hospital"
+            required
+            placeholder="0.00"
+          />
+        </label>
+      </div>
+
+      {unitProfit != null ? (
+        <div className="rounded-xl bg-hospital-light px-3.5 py-2 text-xs text-hospital-dark flex items-center justify-between">
+          <span>Estimated profit / unit:</span>
+          <span className="font-bold text-sm text-emerald-700">{formatGhs(unitProfit)}</span>
+        </div>
+      ) : null}
+
+      <label className="block text-sm">
+        <span className="mb-1 block font-medium">Reorder level threshold</span>
+        <input
+          type="number"
+          min="0"
+          value={form.reorderLevel}
+          onChange={(e) => setForm({ ...form, reorderLevel: e.target.value })}
+          className="w-full rounded-xl border border-[var(--border)] px-3 py-2.5 text-sm outline-none focus:border-hospital"
+          required
+        />
+      </label>
+
+      <div className="flex flex-wrap gap-4 pt-1">
+        <label className="flex items-center gap-2 text-sm font-medium cursor-pointer">
+          <input
+            type="checkbox"
+            checked={form.prescriptionOnly}
+            onChange={(e) => setForm({ ...form, prescriptionOnly: e.target.checked })}
+            className="h-4 w-4 rounded border-gray-300 text-hospital focus:ring-hospital"
+          />
+          Prescription only (Rx)
+        </label>
+        <label className="flex items-center gap-2 text-sm font-medium cursor-pointer">
+          <input
+            type="checkbox"
+            checked={form.active}
+            onChange={(e) => setForm({ ...form, active: e.target.checked })}
+            className="h-4 w-4 rounded border-gray-300 text-hospital focus:ring-hospital"
+          />
+          Active in catalogue
+        </label>
+      </div>
+
+      {error ? <p className="text-sm text-red-500">{error}</p> : null}
+
+      <div className="flex gap-2 pt-2">
+        <button
+          type="submit"
+          className="flex-1 rounded-xl bg-hospital py-3 font-semibold text-white transition hover:bg-hospital-dark"
+        >
+          {form.id ? 'Save changes' : 'Create product'}
+        </button>
+        {onCancel ? (
+          <button
+            type="button"
+            className="rounded-xl bg-canvas px-4 py-3 font-semibold text-[var(--text)] transition hover:bg-slate-200"
+            onClick={onCancel}
+          >
+            Cancel
+          </button>
+        ) : null}
+      </div>
+    </form>
   )
 }

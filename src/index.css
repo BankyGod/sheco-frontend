@@ -54,11 +54,33 @@ textarea {
   }
 }
 
-/* Horizontal scroll helper — do NOT set display here (would override Tailwind hidden) */
+/* Horizontal scroll helper — smooth touch-scrolling with styled scrollbars */
 .table-scroll {
   width: 100%;
+  max-width: 100%;
+  min-width: 0;
   overflow-x: auto;
   -webkit-overflow-scrolling: touch;
+  scrollbar-width: thin;
+  scrollbar-color: #cbd5e1 #f1f5f9;
+}
+
+.table-scroll::-webkit-scrollbar {
+  height: 6px;
+}
+
+.table-scroll::-webkit-scrollbar-track {
+  background: #f1f5f9;
+  border-radius: 9999px;
+}
+
+.table-scroll::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+  border-radius: 9999px;
+}
+
+.table-scroll::-webkit-scrollbar-thumb:hover {
+  background: #94a3b8;
 }
 
 @theme {

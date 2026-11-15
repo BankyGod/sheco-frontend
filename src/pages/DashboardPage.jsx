@@ -1,25 +1,19 @@
 import { useEffect, useRef, useState } from 'react'
+import { Link } from 'react-router-dom'
 import {
-  Area,
-  AreaChart,
-  Bar,
-  BarChart,
-  CartesianGrid,
-  Line,
-  LineChart,
-  ResponsiveContainer,
-  Tooltip,
-  XAxis,
-  YAxis,
-} from 'recharts'
-import {
+  Boxes,
   CalendarDays,
   ChevronDown,
+  ChevronRight,
   CircleDollarSign,
+  FileBarChart,
   PackageMinus,
+  PlusCircle,
   Receipt,
   ShoppingBag,
+  Smartphone,
   TriangleAlert,
+  Wallet,
 } from 'lucide-react'
 import StatCard from '../components/StatCard'
 import { useAuth } from '../context/AuthContext'
@@ -129,16 +123,13 @@ export default function DashboardPage() {
   const momoShare = stats.todayRevenue
     ? Math.round((stats.momoRevenue / stats.todayRevenue) * 100)
     : 0
-  const lowStockShare = Math.min(100, (alerts.lowStock?.length || 0) * 18)
-  const expiryShare = Math.min(100, (alerts.expiringSoon?.length || 0) * 20)
-  const series = stats.series || stats.weekly || []
-  const trend = stats.trend || stats.monthly || []
-  const volumeLabel = stats.volumeLabel || 'Sales volume'
+
   const salesLabel = `${periodMeta.label} sales`
   const revenueLabel = `${periodMeta.label} revenue`
 
   return (
     <div className="space-y-6">
+      {/* Header with Greeting & Period Filter */}
       <div className="flex flex-wrap items-end justify-between gap-4">
         <div>
           <h2 className="text-3xl font-semibold tracking-tight">Dashboard</h2>
@@ -149,20 +140,20 @@ export default function DashboardPage() {
         <div className="relative" ref={periodRef}>
           <button
             type="button"
-            className="inline-flex items-center gap-2 rounded-xl bg-white px-4 py-2.5 text-sm font-medium shadow-[var(--shadow)]"
+            className="inline-flex items-center gap-2 rounded-xl bg-white px-4 py-2.5 text-sm font-medium shadow-[var(--shadow)] transition hover:bg-canvas"
             onClick={() => setPeriodOpen((open) => !open)}
             aria-haspopup="listbox"
             aria-expanded={periodOpen}
           >
             <CalendarDays size={16} className="text-hospital" />
-            Filter Period
-            <span className="text-[var(--text-muted)]">{periodMeta.label}</span>
+            <span className="hidden sm:inline">Filter Period:</span>
+            <span className="font-semibold text-hospital-dark">{periodMeta.label}</span>
             <ChevronDown size={14} className="text-[var(--text-muted)]" />
           </button>
           {periodOpen ? (
             <div
               role="listbox"
-              className="absolute right-0 z-20 mt-2 w-48 overflow-hidden rounded-xl border border-[var(--border)] bg-white py-1 shadow-[var(--shadow)]"
+              className="absolute right-0 z-20 mt-2 w-48 overflow-hidden rounded-xl border border-[var(--border)] bg-white py-1 shadow-lg"
             >
               {PERIODS.map((option) => (
                 <button
@@ -190,11 +181,11 @@ export default function DashboardPage() {
         <p className="rounded-xl bg-red-50 px-4 py-3 text-sm text-red-700">
           {!online ? 'You are offline. ' : 'Server unreachable. '}
           Showing the last saved dashboard
-          {cacheSavedAt ? ` from ${new Date(cacheSavedAt).toLocaleString()}` : ''}. Charts stay
-          available from cache.
+          {cacheSavedAt ? ` from ${new Date(cacheSavedAt).toLocaleString()}` : ''}.
         </p>
       ) : null}
 
+      {/* KPI Stat Cards */}
       <div className="grid grid-cols-2 gap-3 md:gap-4 xl:grid-cols-4">
         <StatCard
           label={salesLabel}
@@ -228,132 +219,148 @@ export default function DashboardPage() {
         />
       </div>
 
-      <div className="grid gap-4 xl:grid-cols-[1.1fr_1.4fr]">
+      {/* Overview Panels: Quick Actions, Payment Breakdown, and Stock Health */}
+      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+        {/* Payment Summary */}
         <div className="rounded-2xl bg-white p-5 shadow-[var(--shadow)]">
-          <h3 className="text-lg font-semibold">Pie Chart</h3>
-          <div className="mt-6 flex flex-wrap items-center justify-around gap-4">
-            <Ring label="Cash Share" value={cashShare} color="#ef4444" />
-            <Ring label="Low Stock" value={lowStockShare} color="#22c55e" />
-            <Ring label="MoMo Share" value={momoShare || expiryShare} color="#3b82f6" />
+          <div className="flex items-center justify-between">
+            <h3 className="font-semibold text-[var(--text)]">Payment Breakdown</h3>
+            <span className="text-xs text-[var(--text-muted)]">{periodMeta.label}</span>
+          </div>
+
+          <div className="mt-4 space-y-3">
+            <div>
+              <div className="flex items-center justify-between text-sm">
+                <span className="inline-flex items-center gap-1.5 font-medium text-[var(--text)]">
+                  <Wallet size={15} className="text-emerald-600" /> Cash
+                </span>
+                <span className="font-semibold">{formatGhs(stats.cashRevenue)} ({cashShare}%)</span>
+              </div>
+              <div className="mt-1.5 h-2 w-full overflow-hidden rounded-full bg-slate-100">
+                <div
+                  className="h-full rounded-full bg-emerald-500 transition-all duration-700"
+                  style={{ width: `${cashShare}%` }}
+                />
+              </div>
+            </div>
+
+            <div>
+              <div className="flex items-center justify-between text-sm">
+                <span className="inline-flex items-center gap-1.5 font-medium text-[var(--text)]">
+                  <Smartphone size={15} className="text-hospital" /> Mobile Money
+                </span>
+                <span className="font-semibold">{formatGhs(stats.momoRevenue)} ({momoShare}%)</span>
+              </div>
+              <div className="mt-1.5 h-2 w-full overflow-hidden rounded-full bg-slate-100">
+                <div
+                  className="h-full rounded-full bg-hospital transition-all duration-700"
+                  style={{ width: `${momoShare}%` }}
+                />
+              </div>
+            </div>
+
+            <div className="pt-2 text-right">
+              <Link
+                to="/reports"
+                className="inline-flex items-center gap-1 text-xs font-semibold text-hospital hover:underline"
+              >
+                View Detailed Reports & Charts <ChevronRight size={14} />
+              </Link>
+            </div>
           </div>
         </div>
 
+        {/* Stock Health */}
         <div className="rounded-2xl bg-white p-5 shadow-[var(--shadow)]">
-          <div className="flex items-center justify-between gap-3">
-            <h3 className="text-lg font-semibold">Chart Order</h3>
-            <button type="button" className="rounded-xl bg-hospital px-3 py-2 text-xs font-semibold text-white">
-              Save Report
-            </button>
+          <div className="flex items-center justify-between">
+            <h3 className="font-semibold text-[var(--text)]">Stock Health</h3>
+            <Link
+              to="/inventory"
+              className="text-xs font-semibold text-hospital hover:underline"
+            >
+              Inventory
+            </Link>
           </div>
-          <div className="mt-4 h-56">
-            <ResponsiveContainer width="100%" height="100%">
-              <AreaChart data={series}>
-                <defs>
-                  <linearGradient id="salesFill" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor="#4A9BCF" stopOpacity={0.35} />
-                    <stop offset="95%" stopColor="#4A9BCF" stopOpacity={0} />
-                  </linearGradient>
-                </defs>
-                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#eef0f4" />
-                <XAxis dataKey="label" tickLine={false} axisLine={false} tick={{ fontSize: 12 }} />
-                <YAxis tickLine={false} axisLine={false} tick={{ fontSize: 12 }} />
-                <Tooltip />
-                <Area
-                  type="monotone"
-                  dataKey="sales"
-                  stroke="#4A9BCF"
-                  fill="url(#salesFill)"
-                  strokeWidth={3}
-                  animationDuration={1200}
-                  animationEasing="ease-out"
-                />
-              </AreaChart>
-            </ResponsiveContainer>
+          <div className="mt-3 grid grid-cols-3 gap-2">
+            <div className="rounded-xl bg-amber-50 p-3 text-center">
+              <p className="text-xs text-amber-700">Low stock</p>
+              <p className="mt-1 text-xl font-bold text-amber-800">{alerts.lowStock?.length || 0}</p>
+            </div>
+            <div className="rounded-xl bg-red-50 p-3 text-center">
+              <p className="text-xs text-red-600">Expiring</p>
+              <p className="mt-1 text-xl font-bold text-red-700">{alerts.expiringSoon?.length || 0}</p>
+            </div>
+            <div className="rounded-xl bg-slate-100 p-3 text-center">
+              <p className="text-xs text-slate-600">Expired</p>
+              <p className="mt-1 text-xl font-bold text-slate-800">{alerts.expired?.length || 0}</p>
+            </div>
+          </div>
+          <p className="mt-3 text-xs text-[var(--text-muted)]">
+            FEFO policy active. Expired batches cannot be dispensed at POS.
+          </p>
+        </div>
+
+        {/* Quick Shortcuts */}
+        <div className="rounded-2xl bg-white p-5 shadow-[var(--shadow)] md:col-span-2 xl:col-span-1">
+          <h3 className="font-semibold text-[var(--text)]">Quick Actions</h3>
+          <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-4 xl:grid-cols-2">
+            <Link
+              to="/pos"
+              className="flex items-center gap-2 rounded-xl bg-hospital-light px-3 py-2.5 text-xs font-semibold text-hospital-dark transition hover:bg-hospital hover:text-white"
+            >
+              <PlusCircle size={16} /> New Sale
+            </Link>
+            <Link
+              to="/inventory"
+              className="flex items-center gap-2 rounded-xl bg-canvas px-3 py-2.5 text-xs font-semibold text-[var(--text)] transition hover:bg-slate-200"
+            >
+              <Boxes size={16} /> Restock
+            </Link>
+            <Link
+              to="/reports"
+              className="flex items-center gap-2 rounded-xl bg-canvas px-3 py-2.5 text-xs font-semibold text-[var(--text)] transition hover:bg-slate-200"
+            >
+              <FileBarChart size={16} /> Reports & Charts
+            </Link>
+            <Link
+              to="/sales"
+              className="flex items-center gap-2 rounded-xl bg-canvas px-3 py-2.5 text-xs font-semibold text-[var(--text)] transition hover:bg-slate-200"
+            >
+              <Receipt size={16} /> All Sales
+            </Link>
           </div>
         </div>
       </div>
 
-      <div className="grid gap-4 xl:grid-cols-[1.5fr_1fr]">
-        <div className="rounded-2xl bg-white p-5 shadow-[var(--shadow)]">
-          <h3 className="text-lg font-semibold">Total Revenue</h3>
-          <div className="mt-4 h-64">
-            <ResponsiveContainer width="100%" height="100%">
-              <LineChart data={trend}>
-                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#eef0f4" />
-                <XAxis dataKey="label" tickLine={false} axisLine={false} tick={{ fontSize: 12 }} />
-                <YAxis tickLine={false} axisLine={false} tick={{ fontSize: 12 }} />
-                <Tooltip formatter={(v) => `GHS ${Number(v).toLocaleString()}`} />
-                <Line
-                  type="monotone"
-                  dataKey="revenue"
-                  stroke="#4A9BCF"
-                  strokeWidth={3}
-                  dot={false}
-                  animationDuration={1400}
-                  animationEasing="ease-out"
-                />
-                <Line
-                  type="monotone"
-                  dataKey="profit"
-                  stroke="#ef4444"
-                  strokeWidth={3}
-                  dot={false}
-                  animationDuration={1400}
-                  animationEasing="ease-out"
-                />
-              </LineChart>
-            </ResponsiveContainer>
-          </div>
-        </div>
-
-        <div className="rounded-2xl bg-white p-5 shadow-[var(--shadow)]">
-          <h3 className="text-lg font-semibold">Customer Map</h3>
-          <p className="text-xs text-[var(--text-muted)]">{volumeLabel}</p>
-          <div className="mt-4 h-56">
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={series}>
-                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#eef0f4" />
-                <XAxis dataKey="label" tickLine={false} axisLine={false} tick={{ fontSize: 12 }} />
-                <YAxis tickLine={false} axisLine={false} tick={{ fontSize: 12 }} />
-                <Tooltip />
-                <Bar
-                  dataKey="sales"
-                  fill="#4A9BCF"
-                  radius={[8, 8, 0, 0]}
-                  animationDuration={1100}
-                  animationEasing="ease-out"
-                />
-              </BarChart>
-            </ResponsiveContainer>
-          </div>
-        </div>
-      </div>
-
+      {/* Recent Sales */}
       <div className="rounded-2xl bg-white p-5 shadow-[var(--shadow)]">
         <div className="mb-4 flex items-center justify-between">
-          <h3 className="text-lg font-semibold">Recent Sales & Alerts</h3>
+          <h3 className="text-lg font-semibold">Recent Sales</h3>
+          <Link to="/sales" className="text-xs font-semibold text-hospital hover:underline">
+            View all
+          </Link>
         </div>
-        <div className="grid gap-4 lg:grid-cols-3">
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {recentSales.map((sale) => {
             const seller =
               sale.salespersonName ||
               users.find((u) => String(u.id) === String(sale.salespersonId))?.name ||
               'Salesperson'
             return (
-              <div key={sale.id} className="relative rounded-2xl border border-[var(--border)] p-4">
+              <div key={sale.id} className="relative rounded-2xl border border-[var(--border)] p-4 transition hover:border-hospital-soft">
                 <div className="flex items-start justify-between gap-3">
-                  <div>
-                    <p className="font-semibold">{seller}</p>
+                  <div className="min-w-0">
+                    <p className="truncate font-semibold">{seller}</p>
                     <p className="text-xs text-[var(--text-muted)]">
                       {new Date(sale.createdAt).toLocaleString()}
                     </p>
                   </div>
-                  <div className="flex h-10 w-10 items-center justify-center rounded-full bg-hospital-light text-hospital-dark">
+                  <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-hospital-light text-hospital-dark">
                     <Receipt size={18} />
                   </div>
                 </div>
                 <p className="mt-3 text-sm text-[var(--text-muted)]">
-                  {sale.receiptNumber} · {sale.payment.method.toUpperCase()}
+                  {sale.receiptNumber} · {sale.payment?.method?.toUpperCase()}
                   {sale.status === 'voided' ? ' · VOIDED' : ''}
                 </p>
                 <p className="mt-2 text-lg font-semibold">{formatGhs(sale.total)}</p>
@@ -365,46 +372,6 @@ export default function DashboardPage() {
           ) : null}
         </div>
       </div>
-    </div>
-  )
-}
-
-function Ring({ label, value, color }) {
-  const clamped = Math.max(0, Math.min(100, Number(value) || 0))
-  const radius = 36
-  const circumference = 2 * Math.PI * radius
-  const [offset, setOffset] = useState(circumference)
-
-  useEffect(() => {
-    const frame = requestAnimationFrame(() => {
-      setOffset(circumference - (clamped / 100) * circumference)
-    })
-    return () => cancelAnimationFrame(frame)
-  }, [clamped, circumference])
-
-  return (
-    <div className="flex flex-col items-center gap-2">
-      <div className="relative h-[100px] w-[100px]">
-        <svg width="100" height="100" className="-rotate-90" aria-hidden>
-          <circle cx="50" cy="50" r={radius} stroke="#eef0f4" strokeWidth="10" fill="none" />
-          <circle
-            cx="50"
-            cy="50"
-            r={radius}
-            stroke={color}
-            strokeWidth="10"
-            fill="none"
-            strokeDasharray={circumference}
-            strokeDashoffset={offset}
-            strokeLinecap="round"
-            style={{ transition: 'stroke-dashoffset 1.1s ease-out' }}
-          />
-        </svg>
-        <div className="absolute inset-0 flex items-center justify-center text-sm font-bold">
-          {clamped}%
-        </div>
-      </div>
-      <p className="text-xs text-[var(--text-muted)]">{label}</p>
     </div>
   )
 }
