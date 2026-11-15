@@ -7,6 +7,7 @@ import {
   ChevronRight,
   CircleDollarSign,
   FileBarChart,
+  Package,
   PackageMinus,
   PlusCircle,
   Receipt,
@@ -19,7 +20,7 @@ import StatCard from '../components/StatCard'
 import { useAuth } from '../context/AuthContext'
 import { useOffline } from '../context/OfflineContext'
 import { getDashboardStats, listSales } from '../api/sales'
-import { getStockAlerts } from '../api/inventory'
+import { getStockAlerts, listProducts } from '../api/inventory'
 import { formatGhs } from '../utils/money'
 import { listUsers } from '../api/auth'
 import { getCachedDashboard, setCachedDashboard } from '../utils/offlineStore'
@@ -42,6 +43,7 @@ export default function DashboardPage() {
   const periodRef = useRef(null)
   const [stats, setStats] = useState(null)
   const [alerts, setAlerts] = useState({ lowStock: [], expiringSoon: [], expired: [] })
+  const [products, setProducts] = useState([])
   const [recentSales, setRecentSales] = useState([])
   const [users, setUsers] = useState([])
   const [error, setError] = useState('')
@@ -64,15 +66,17 @@ export default function DashboardPage() {
     async function load() {
       setLoading(true)
       try {
-        const [dashboard, stockAlerts, sales, userRows] = await Promise.all([
+        const [dashboard, stockAlerts, sales, userRows, productRows] = await Promise.all([
           getDashboardStats(period),
           getStockAlerts(),
           listSales(),
           listUsers(),
+          listProducts({ includeInactive: false }),
         ])
         if (!active) return
         setStats(dashboard)
         setAlerts(stockAlerts)
+        setProducts(productRows || [])
         setRecentSales(sales.slice(0, 6))
         setUsers(userRows)
         setFromCache(false)
@@ -82,6 +86,7 @@ export default function DashboardPage() {
           period,
           stats: dashboard,
           alerts: stockAlerts,
+          products: productRows || [],
           recentSales: sales.slice(0, 6),
           users: userRows,
         })
@@ -91,6 +96,7 @@ export default function DashboardPage() {
         if (cached?.stats) {
           setStats(cached.stats)
           setAlerts(cached.alerts || { lowStock: [], expiringSoon: [], expired: [] })
+          setProducts(cached.products || [])
           setRecentSales(cached.recentSales || [])
           setUsers(cached.users || [])
           setFromCache(true)
@@ -153,7 +159,7 @@ export default function DashboardPage() {
           {periodOpen ? (
             <div
               role="listbox"
-              className="absolute right-0 z-20 mt-2 w-48 overflow-hidden rounded-xl border border-[var(--border)] bg-white py-1 shadow-lg"
+              className="absolute left-0 sm:left-auto sm:right-0 z-20 mt-2 w-48 overflow-hidden rounded-xl border border-[var(--border)] bg-white py-1 shadow-lg"
             >
               {PERIODS.map((option) => (
                 <button
@@ -186,7 +192,7 @@ export default function DashboardPage() {
       ) : null}
 
       {/* KPI Stat Cards */}
-      <div className="grid grid-cols-2 gap-3 md:gap-4 xl:grid-cols-4">
+      <div className="grid grid-cols-2 gap-3 md:gap-4 sm:grid-cols-3 xl:grid-cols-5">
         <StatCard
           label={salesLabel}
           value={stats.todayCount}
@@ -202,6 +208,13 @@ export default function DashboardPage() {
           compact
         />
         <StatCard
+          label="Total Products"
+          value={products.length}
+          trend={`${products.filter((p) => (p.availableQty || 0) > 0).length} in stock`}
+          icon={Package}
+          compact
+        />
+        <StatCard
           label="Low Stock Items"
           value={alerts.lowStock?.length || 0}
           trend="At or below reorder level"
@@ -209,14 +222,16 @@ export default function DashboardPage() {
           accent="warning"
           compact
         />
-        <StatCard
-          label="Expiring Soon"
-          value={alerts.expiringSoon?.length || 0}
-          trend="Within 90 days"
-          icon={TriangleAlert}
-          accent="danger"
-          compact
-        />
+        <div className="col-span-2 sm:col-span-1">
+          <StatCard
+            label="Expiring Soon"
+            value={alerts.expiringSoon?.length || 0}
+            trend="Within 90 days"
+            icon={TriangleAlert}
+            accent="danger"
+            compact
+          />
+        </div>
       </div>
 
       {/* Overview Panels: Quick Actions, Payment Breakdown, and Stock Health */}
