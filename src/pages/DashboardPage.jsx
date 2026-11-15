@@ -207,30 +207,36 @@ export default function DashboardPage() {
           icon={CircleDollarSign}
           compact
         />
-        <StatCard
-          label="Total Products"
-          value={products.length}
-          trend={`${products.filter((p) => (p.availableQty || 0) > 0).length} in stock`}
-          icon={Package}
-          compact
-        />
-        <StatCard
-          label="Low Stock Items"
-          value={alerts.lowStock?.length || 0}
-          trend="At or below reorder level"
-          icon={PackageMinus}
-          accent="warning"
-          compact
-        />
-        <div className="col-span-2 sm:col-span-1">
+        <Link to="/products" className="block transition hover:opacity-95">
           <StatCard
-            label="Expiring Soon"
-            value={alerts.expiringSoon?.length || 0}
-            trend="Within 90 days"
-            icon={TriangleAlert}
-            accent="danger"
+            label="Total Products"
+            value={products.length}
+            trend={`${products.filter((p) => (p.availableQty || 0) > 0).length} in stock · View catalogue`}
+            icon={Package}
             compact
           />
+        </Link>
+        <Link to="/inventory" className="block transition hover:opacity-95">
+          <StatCard
+            label="Low Stock Items"
+            value={alerts.lowStock?.length || 0}
+            trend="At or below reorder level"
+            icon={PackageMinus}
+            accent="warning"
+            compact
+          />
+        </Link>
+        <div className="col-span-2 sm:col-span-1">
+          <Link to="/inventory" className="block transition hover:opacity-95">
+            <StatCard
+              label="Expiring Soon"
+              value={alerts.expiringSoon?.length || 0}
+              trend="Within 90 days"
+              icon={TriangleAlert}
+              accent="danger"
+              compact
+            />
+          </Link>
         </div>
       </div>
 
@@ -296,19 +302,23 @@ export default function DashboardPage() {
               Inventory
             </Link>
           </div>
-          <div className="mt-3 grid grid-cols-3 gap-2">
-            <div className="rounded-xl bg-amber-50 p-3 text-center">
-              <p className="text-xs text-amber-700">Low stock</p>
+          <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-4">
+            <Link to="/products" className="rounded-xl bg-sky-50 p-3 text-center transition hover:bg-sky-100">
+              <p className="text-xs text-sky-700 font-medium">Total Products</p>
+              <p className="mt-1 text-xl font-bold text-sky-800">{products.length}</p>
+            </Link>
+            <Link to="/inventory" className="rounded-xl bg-amber-50 p-3 text-center transition hover:bg-amber-100">
+              <p className="text-xs text-amber-700 font-medium">Low stock</p>
               <p className="mt-1 text-xl font-bold text-amber-800">{alerts.lowStock?.length || 0}</p>
-            </div>
-            <div className="rounded-xl bg-red-50 p-3 text-center">
-              <p className="text-xs text-red-600">Expiring</p>
+            </Link>
+            <Link to="/inventory" className="rounded-xl bg-red-50 p-3 text-center transition hover:bg-red-100">
+              <p className="text-xs text-red-600 font-medium">Expiring</p>
               <p className="mt-1 text-xl font-bold text-red-700">{alerts.expiringSoon?.length || 0}</p>
-            </div>
-            <div className="rounded-xl bg-slate-100 p-3 text-center">
-              <p className="text-xs text-slate-600">Expired</p>
+            </Link>
+            <Link to="/inventory" className="rounded-xl bg-slate-100 p-3 text-center transition hover:bg-slate-200">
+              <p className="text-xs text-slate-600 font-medium">Expired</p>
               <p className="mt-1 text-xl font-bold text-slate-800">{alerts.expired?.length || 0}</p>
-            </div>
+            </Link>
           </div>
           <p className="mt-3 text-xs text-[var(--text-muted)]">
             FEFO policy active. Expired batches cannot be dispensed at POS.
